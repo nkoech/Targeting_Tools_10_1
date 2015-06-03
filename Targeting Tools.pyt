@@ -126,7 +126,7 @@ class GetSuitableLand(object):
                 elif opt_to_val and opt_from_val == "#":
                     in_raster.setErrorMessage("Crop optimal value \"to\" and \"from\" are missing")
                 elif float(opt_from_val) < minVal:
-                    in_raster.setErrorMessage("Crop optimal value {0} is less than the minimum value {1}".format(opt_from_val,minVal))
+                    in_raster.setWarningMessage("Crop optimal value {0} is less than the minimum value {1}".format(opt_from_val,minVal))
                 elif float(opt_from_val) > maxVal:
                     in_raster.setErrorMessage("Crop optimal value {0} is greater than the maximum value {1}".format(opt_from_val,maxVal))
                 elif float(opt_from_val) > float(opt_to_val):
@@ -134,7 +134,7 @@ class GetSuitableLand(object):
                 elif float(opt_to_val) < minVal:
                     in_raster.setErrorMessage("Crop optimal value {0} is less than the minimum value {1}".format(opt_to_val,minVal))
                 elif float(opt_to_val) > maxVal:
-                    in_raster.setErrorMessage("Crop optimal value {0} is greater than the maximum value {1}".format(opt_to_val,maxVal))
+                    in_raster.setWarningMessage("Crop optimal value {0} is greater than the maximum value {1}".format(opt_to_val,maxVal))
                 elif num_rows == 1:
                     in_raster.setErrorMessage("Input rasters should be more than one")
                 else:
@@ -144,10 +144,10 @@ class GetSuitableLand(object):
                     last_spataial_ref = arcpy.Describe(ras_file).SpatialReference   # Get spatial reference
                     for ref in ras_ref:
                         if last_spataial_ref.Type != ref.Type:  # Check difference in spatial reference type
-                            in_raster.setErrorMessage("All raster data must be in the same spatial reference")
+                            in_raster.setWarningMessage("All raster data must be in the same spatial reference")
                         elif last_spataial_ref.Type != "Geographic":
                             if last_spataial_ref.PCSCode != ref.PCSCode:  # Check projection code
-                                in_raster.setErrorMessage("All raster data must be in the same projection system")
+                                in_raster.setWarningMessage("All raster data must be in the same projection system")
                         else:
                             pass
                 else:
