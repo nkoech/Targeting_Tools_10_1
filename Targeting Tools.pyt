@@ -126,15 +126,15 @@ class GetSuitableLand(object):
                 elif opt_to_val and opt_from_val == "#":
                     in_raster.setErrorMessage("Crop optimal value \"to\" and \"from\" are missing")
                 elif float(opt_from_val) < minVal:
-                    in_raster.setWarningMessage("Crop optimal value {0} is less than the minimum value {1}".format(opt_from_val,minVal))
+                    in_raster.setWarningMessage("Crop optimal value {0} is less than the minimum value {1}".format(opt_from_val, minVal))
                 elif float(opt_from_val) > maxVal:
-                    in_raster.setErrorMessage("Crop optimal value {0} is greater than the maximum value {1}".format(opt_from_val,maxVal))
+                    in_raster.setErrorMessage("Crop optimal value {0} is greater than the maximum value {1}".format(opt_from_val, maxVal))
                 elif float(opt_from_val) > float(opt_to_val):
                     in_raster.setErrorMessage("Crop optimal value \"from\" is greater than crop optimal value \"to\"")
                 elif float(opt_to_val) < minVal:
-                    in_raster.setErrorMessage("Crop optimal value {0} is less than the minimum value {1}".format(opt_to_val,minVal))
+                    in_raster.setErrorMessage("Crop optimal value {0} is less than the minimum value {1}".format(opt_to_val, minVal))
                 elif float(opt_to_val) > maxVal:
-                    in_raster.setWarningMessage("Crop optimal value {0} is greater than the maximum value {1}".format(opt_to_val,maxVal))
+                    in_raster.setWarningMessage("Crop optimal value {0} is greater than the maximum value {1}".format(opt_to_val, maxVal))
                 elif num_rows == 1:
                     in_raster.setErrorMessage("Input rasters should be more than one")
                 else:
