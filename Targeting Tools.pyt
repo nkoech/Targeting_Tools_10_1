@@ -77,16 +77,10 @@ class GetSuitableLand(object):
         if parameters[0].value:
             in_raster = parameters[0]
             vtab = arcpy.ValueTable(len(in_raster.columns))  # Number of value table columns
-            num_rows = len(in_raster.values)  # The number of rows in the table
             ras_max_min = True
-            i = 0
             # Get values from the generator function and update value table
             for opt_from_val, opt_to_val, ras_file, minVal, maxVal in self.getRowValue(in_raster, ras_max_min):
-                i += 1
-                if i == num_rows:
-                    self.updateValueTable(in_raster, opt_from_val, opt_to_val, vtab, ras_file, minVal, maxVal)
-                else:
-                    self.updateValueTable(in_raster, opt_from_val, opt_to_val, vtab, ras_file, minVal, maxVal)
+                self.updateValueTable(in_raster, opt_from_val, opt_to_val, vtab, ras_file, minVal, maxVal)
         return
 
     def updateValueTable(self, in_raster, opt_from_val, opt_to_val, vtab, ras_file, minVal, maxVal):
@@ -125,15 +119,15 @@ class GetSuitableLand(object):
                     in_raster.setErrorMessage("Crop optimal value \"to\" is missing")
                 elif opt_to_val and opt_from_val == "#":
                     in_raster.setErrorMessage("Crop optimal value \"to\" and \"from\" are missing")
-                elif float(opt_from_val) < minVal:
+                elif float(opt_from_val) < float(minVal):
                     in_raster.setWarningMessage("Crop optimal value {0} is less than the minimum value {1}".format(opt_from_val, minVal))
-                elif float(opt_from_val) > maxVal:
+                elif float(opt_from_val) > float(maxVal):
                     in_raster.setErrorMessage("Crop optimal value {0} is greater than the maximum value {1}".format(opt_from_val, maxVal))
                 elif float(opt_from_val) > float(opt_to_val):
                     in_raster.setErrorMessage("Crop optimal value \"from\" is greater than crop optimal value \"to\"")
-                elif float(opt_to_val) < minVal:
+                elif float(opt_to_val) < float(minVal):
                     in_raster.setErrorMessage("Crop optimal value {0} is less than the minimum value {1}".format(opt_to_val, minVal))
-                elif float(opt_to_val) > maxVal:
+                elif float(opt_to_val) > float(maxVal):
                     in_raster.setWarningMessage("Crop optimal value {0} is greater than the maximum value {1}".format(opt_to_val, maxVal))
                 elif num_rows == 1:
                     in_raster.setErrorMessage("Input rasters should be more than one")
@@ -160,27 +154,87 @@ class GetSuitableLand(object):
 
         try:
             in_raster = parameters[0]
-            ras_max_min = False
+            ras_max_min = True
             i = 0
-            # Get values from the generator function to show update messages
-            for opt_from_val, opt_to_val, ras_file in self.getRowValue(in_raster, ras_max_min):
+            num_rows = len(parameters[0].values)  # The number of rows in the table
+            # Get values from the generator function for calculation of minimums
+            for opt_from_val, opt_to_val, ras_file, minVal, maxVal in self.getRowValue(in_raster, ras_max_min):
                 i += 1
-                arcpy.AddMessage("Creating conditional output for {0}\n".format(ntpath.basename(ras_file)))
-                arcpy.gp.Con_sa(ras_file, "1", "in_memory" + "\\" + "raster_temp_" + str(i), "0", "\"Value\" >= " + opt_from_val + " AND \"Value\" <= " + opt_to_val)
+                arcpy.AddMessage("Calculating {0} - {1}\n".format(ntpath.basename(ras_file), minVal))
+                arcpy.gp.Minus_sa(ras_file, "'" + minVal + "'", "in_memory\\ras_min1_" + str(i))
+            i = 0
+
+            for j in range(0, num_rows):
+                j += 1
+                arcpy.AddMessage("Creating conditional output for {0}\n".format("ras_min1_" + str(j)))
+                arcpy.gp.Con_sa("in_memory\\ras_min1_" + str(j), "0", "in_memory\\ras_min2_" + str(j), "in_memory\\ras_min1_" + str(j), "\"Value\" < 0")
+                arcpy.management.Delete("in_memory\\ras_min1_" + str(j))  # Delete files in memory
+
+            for opt_from_val, opt_to_val, ras_file, minVal, maxVal in self.getRowValue(in_raster, ras_max_min):
+                i += 1
+                if float(opt_from_val) - float(minVal) == 0:
+                    arcpy.AddMessage("Calculating {0} / {1}\n".format("ras_min2_" + str(i), "1"))
+                    arcpy.gp.Divide_sa("in_memory\\ras_min2_" + str(i), "1", "in_memory\\ras_min3_" + str(i))
+                else:
+                    arcpy.AddMessage("Calculating {0} / {1} - {2}\n".format("ras_min2_" + str(i), opt_from_val, minVal))
+                    arcpy.gp.Divide_sa("in_memory\\ras_min2_" + str(i), "'" + str(float(opt_from_val) - float(minVal)) + "'", "in_memory\\ras_min3_" + str(i))
+                arcpy.management.Delete("in_memory\\ras_min2_" + str(i))
+            i = 0
+
+            for j in range(0, num_rows):
+                j += 1
+                arcpy.AddMessage("Creating conditional output for {0}\n".format("ras_min3_" + str(j)))
+                arcpy.gp.Con_sa("in_memory\\ras_min3_" + str(j), "1", "in_memory\\ras_min4_" + str(j), "in_memory\\ras_min3_" + str(j), "\"Value\" > 1")
+                arcpy.management.Delete("in_memory\\ras_min3_" + str(j))
+
+            # Get values from the generator function for calculation of maximums
+            for opt_from_val, opt_to_val, ras_file, minVal, maxVal in self.getRowValue(in_raster, ras_max_min):
+                i += 1
+                arcpy.AddMessage("Calculating {0} - {1}\n".format(maxVal, ntpath.basename(ras_file)))
+                arcpy.gp.Minus_sa("'" + maxVal + "'", ras_file, "in_memory\\ras_max1_" + str(i))
+            i = 0
+
+            for j in range(0, num_rows):
+                j += 1
+                arcpy.AddMessage("Creating conditional output for {0}\n".format("ras_max1_" + str(j)))
+                arcpy.gp.Con_sa("in_memory\\ras_max1_" + str(j), "0", "in_memory\\ras_max2_" + str(j), "in_memory\\ras_max1_" + str(j), "\"Value\" < 0")
+                arcpy.management.Delete("in_memory\\ras_max1_" + str(j))  # Delete files in memory
+
+            for opt_from_val, opt_to_val, ras_file, minVal, maxVal in self.getRowValue(in_raster, ras_max_min):
+                i += 1
+                if float(maxVal) - float(opt_to_val) == 0:
+                    arcpy.AddMessage("Calculating {0} / {1}\n".format("ras_max2_" + str(i), "1"))
+                    arcpy.gp.Divide_sa("in_memory\\ras_max2_" + str(i), "1", "in_memory\\ras_max3_" + str(i))
+                else:
+                    arcpy.AddMessage("Calculating {0} / {1} - {2}\n".format("ras_max2_" + str(i), maxVal, opt_to_val))
+                    arcpy.gp.Divide_sa("in_memory\\ras_max2_" + str(i), "'" + str(float(maxVal) - float(opt_to_val)) + "'", "in_memory\\ras_max3_" + str(i))
+                arcpy.management.Delete("in_memory\\ras_max2_" + str(i))
+            i = 0
+
+            for j in range(0, num_rows):
+                j += 1
+                arcpy.AddMessage("Creating conditional output for {0}\n".format("ras_max3_" + str(j)))
+                arcpy.gp.Con_sa("in_memory\\ras_max3_" + str(j), "1", "in_memory\\ras_max4_" + str(j), "in_memory\\ras_max3_" + str(j), "\"Value\" > 1")
+                arcpy.management.Delete("in_memory\\ras_max3_" + str(j))
+
+            # Calculate minimum rasters from the minimums and maximums calculation outputs
+            for j in range(0, num_rows):
+                j += 1
+                arcpy.AddMessage("Generating minimum values for {0} and {1}\n".format("ras_min4_" + str(j), "ras_max4_" + str(j)))
+                arcpy.gp.CellStatistics_sa("in_memory\\ras_min4_" + str(j) + ";" + "in_memory\\ras_max4_" + str(j), "in_memory\\ras_min_max_" + str(j), "MINIMUM", "DATA")
+                arcpy.management.Delete("in_memory\\ras_min4_" + str(j))
+                arcpy.management.Delete("in_memory\\ras_max4_" + str(j))
 
             out_ras = parameters[1].valueAsText.replace("\\","/")  # Get output file
-            out_ras_temp = arcpy.Raster("in_memory\\raster_temp_1")  # Get the initial con file in memory
-            num_rows = len(parameters[0].values)  # The number of rows in the table
+            out_ras_temp = arcpy.Raster("in_memory\\ras_min_max_1")  # Get the initial con file in memory
             #  Multiply files and save output
             for j in range(1, num_rows):
                 j += 1
-                if j <= num_rows:
-                    arcpy.AddMessage("Multiplying file{0} with input raster\n".format("raster_temp_" + str(j)))
-                    out_ras_temp = out_ras_temp * arcpy.Raster("in_memory\\raster_temp_" + str(j))
-
+                arcpy.AddMessage("Multiplying file {0} with input raster\n".format("raster_temp_" + str(j)))
+                out_ras_temp = out_ras_temp * arcpy.Raster("in_memory\\ras_min_max_" + str(j))
             arcpy.AddMessage("Saving Output\n")
             out_ras_temp.save(out_ras)
-            arcpy.management.Delete('in_memory')  # Delete files in memory
+            arcpy.management.Delete("in_memory")  # Delete files in memory
             arcpy.AddMessage("Output saved!\n")
             return
         except Exception as ex:
@@ -200,8 +254,13 @@ class GetSuitableLand(object):
             ras_file = lst.rsplit(' ', 4)[0]  # Get raster file path
             paramInRaster = arcpy.Raster(ras_file)
             if ras_max_min:
-                minVal = paramInRaster.minimum  # Minimum raster value
-                maxVal = paramInRaster.maximum  # Maximum raster value
-                yield opt_from_val, opt_to_val, ras_file, minVal, maxVal  # Return output
+                if lst.split()[-4] == "#" or lst.split()[-3] == "#":
+                    minVal = paramInRaster.minimum  # Minimum raster value
+                    maxVal = paramInRaster.maximum  # Maximum raster value
+                    yield opt_from_val, opt_to_val, ras_file, minVal, maxVal  # Return output
+                else:
+                    minVal = lst.split()[-4]  # Minimum raster value
+                    maxVal = lst.split()[-3] # Maximum raster value
+                    yield opt_from_val, opt_to_val, ras_file, minVal, maxVal  # Return output
             else:
                 yield opt_from_val, opt_to_val, ras_file
