@@ -55,7 +55,7 @@ class GetSuitableLand(object):
 
     def getParameterInfo(self):
         """Define parameter definitions"""
-        self.parameters[0].columns = [['Raster Layer', 'Rasters'], ['Double', 'Min Value'], ['Double', 'Max Value'], ['Double', 'Optimal From'], ['Double', 'Optimal To']]
+        self.parameters[0].columns = [['Raster Layer', 'Rasters'], ['Double', 'Min Value'], ['Double', 'Max Value'], ['Double', 'Optimal From'], ['Double', 'Optimal To'], ['String', 'Combine']]
         return self.parameters
 
     def isLicensed(self):
@@ -79,7 +79,7 @@ class GetSuitableLand(object):
             vtab = arcpy.ValueTable(len(in_raster.columns))  # Number of value table columns
             ras_max_min = True
             # Get values from the generator function and update value table
-            for opt_from_val, opt_to_val, ras_file, minVal, maxVal in self.getRowValue(in_raster, ras_max_min):
+            for ras_file, minVal, maxVal, opt_from_val, opt_to_val in self.getRowValue(in_raster, ras_max_min):
                 self.updateValueTable(in_raster, opt_from_val, opt_to_val, vtab, ras_file, minVal, maxVal)
         return
 
@@ -111,7 +111,7 @@ class GetSuitableLand(object):
             ras_ref = []
             i = 0
             # Get values from the generator function to show update messages
-            for opt_from_val, opt_to_val, ras_file, minVal, maxVal in self.getRowValue(in_raster, ras_max_min):
+            for ras_file, minVal, maxVal, opt_from_val, opt_to_val in self.getRowValue(in_raster, ras_max_min):
                 i += 1
                 if opt_from_val == "#":
                     in_raster.setErrorMessage("Crop optimal value \"from\" is missing")
@@ -159,7 +159,7 @@ class GetSuitableLand(object):
             num_rows = len(parameters[0].values)  # The number of rows in the table
 
             # Raster minus operation
-            for opt_from_val, opt_to_val, ras_file, minVal, maxVal in self.getRowValue(in_raster, ras_max_min):
+            for ras_file, minVal, maxVal, opt_from_val, opt_to_val in self.getRowValue(in_raster, ras_max_min):
                 i += 1
                 self.rasterMinus(ras_file, minVal, "ras_min1_" + str(i), min_ras=True)
                 self.rasterMinus(ras_file, maxVal, "ras_max1_" + str(i), min_ras=False)
@@ -172,7 +172,7 @@ class GetSuitableLand(object):
                 self.rasterCondition("ras_max1_" + str(j), "ras_max2_" + str(j), "< ", "0")
 
             # Raster divide operation
-            for opt_from_val, opt_to_val, ras_file, minVal, maxVal in self.getRowValue(in_raster, ras_max_min):
+            for ras_file, minVal, maxVal, opt_from_val, opt_to_val in self.getRowValue(in_raster, ras_max_min):
                 i += 1
                 self.rasterDivide(opt_from_val, minVal, "ras_min2_" + str(i), "ras_min3_" + str(i), min_ras=True)
                 self.rasterDivide(opt_to_val, maxVal, "ras_max2_" + str(i), "ras_max3_" + str(i), min_ras=False)
@@ -190,6 +190,7 @@ class GetSuitableLand(object):
                 arcpy.management.Delete("in_memory\\ras_min4_" + str(j))
                 arcpy.management.Delete("in_memory\\ras_max4_" + str(j))
 
+            # Multiply minimums and maximums raster to create a suitability raster/map
             out_ras = parameters[1].valueAsText.replace("\\","/")  # Get output file
             out_ras_temp = arcpy.Raster("in_memory\\ras_min_max_1")  # Get the initial con file in memory
             #  Multiply files and save output
@@ -272,18 +273,20 @@ class GetSuitableLand(object):
                 Optimal From, Optimal To, raster file path, raster minimum value and maximum value
         """
         for lst in in_raster.valueAsText.split(";"):
-            opt_from_val = lst.split()[-2]  # Get crop optimum value from
-            opt_to_val = lst.split()[-1]  # Get crop optimum value to
-            ras_file = lst.rsplit(' ', 4)[0]  # Get raster file path
+
+            ras_file = lst.rsplit(' ', 5)[0]  # Get raster file path
             paramInRaster = arcpy.Raster(ras_file)
+            opt_from_val = lst.split()[-3]  # Get crop optimum value from
+            opt_to_val = lst.split()[-2]  # Get crop optimum value to
+            ras_combine = lst.split()[-1]  # Get combine option
             if ras_max_min:
-                if lst.split()[-4] == "#" or lst.split()[-3] == "#":
+                if lst.split()[-5] == "#" or lst.split()[-4] == "#":
                     minVal = paramInRaster.minimum  # Minimum raster value
                     maxVal = paramInRaster.maximum  # Maximum raster value
-                    yield opt_from_val, opt_to_val, ras_file, minVal, maxVal  # Return output
+                    yield ras_file, minVal, maxVal, opt_from_val, opt_to_val  # Return output
                 else:
-                    minVal = lst.split()[-4]  # Minimum raster value
-                    maxVal = lst.split()[-3] # Maximum raster value
-                    yield opt_from_val, opt_to_val, ras_file, minVal, maxVal  # Return output
+                    minVal = lst.split()[-5]  # Minimum raster value
+                    maxVal = lst.split()[-4] # Maximum raster value
+                    yield ras_file, minVal, maxVal, opt_from_val, opt_to_val
             else:
-                yield opt_from_val, opt_to_val, ras_file
+                yield ras_file, opt_from_val, opt_to_val
