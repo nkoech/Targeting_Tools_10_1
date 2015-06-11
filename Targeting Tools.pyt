@@ -79,23 +79,35 @@ class GetSuitableLand(object):
             vtab = arcpy.ValueTable(len(in_raster.columns))  # Number of value table columns
             ras_max_min = True
             # Get values from the generator function and update value table
-            for ras_file, minVal, maxVal, opt_from_val, opt_to_val in self.getRowValue(in_raster, ras_max_min):
-                self.updateValueTable(in_raster, opt_from_val, opt_to_val, vtab, ras_file, minVal, maxVal)
+            for ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine in self.getRowValue(in_raster, ras_max_min):
+                self.updateValueTable(in_raster, opt_from_val, opt_to_val, ras_combine, vtab, ras_file, minVal, maxVal)
         return
 
-    def updateValueTable(self, in_raster, opt_from_val, opt_to_val, vtab, ras_file, minVal, maxVal):
+    def updateValueTable(self, in_raster, opt_from_val, opt_to_val, ras_combine, vtab, ras_file, minVal, maxVal):
         # End of value table, now update update value table last row with new column data
-        if opt_from_val == "#" and opt_to_val == "#":
-            vtab.addRow('{0} {1} {2} {3} {4}'.format(ras_file, minVal, maxVal, "", ""))
+        if opt_from_val == "#" and opt_to_val == "#" and ras_combine == "#":
+            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, maxVal, "", "", ""))
             in_raster.value = vtab.exportToString()
-        elif opt_from_val != "#" and opt_to_val == "#":
-            vtab.addRow('{0} {1} {2} {3} {4}'.format(ras_file, minVal, maxVal, opt_from_val, ""))
+        elif opt_from_val != "#" and opt_to_val == "#" and ras_combine == "#":
+            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, maxVal, opt_from_val, "", ""))
             in_raster.value = vtab.exportToString()
-        elif opt_from_val == "#" and opt_to_val != "#":
-            vtab.addRow('{0} {1} {2} {3} {4}'.format(ras_file, minVal, maxVal, "", opt_to_val))
+        elif opt_from_val == "#" and opt_to_val != "#" and ras_combine == "#":
+            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, maxVal, "", opt_to_val, ""))
             in_raster.value = vtab.exportToString()
-        elif opt_from_val != "#" and opt_to_val != "#":
-            vtab.addRow('{0} {1} {2} {3} {4}'.format(ras_file, minVal, maxVal, opt_from_val, opt_to_val))
+        elif opt_from_val == "#" and opt_to_val == "#" and ras_combine != "#":
+            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, maxVal, "", "", ras_combine))
+            in_raster.value = vtab.exportToString()
+        elif opt_from_val != "#" and opt_to_val != "#" and ras_combine == "#":
+            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, maxVal, opt_from_val, opt_to_val, ""))
+            in_raster.value = vtab.exportToString()
+        elif opt_from_val == "#" and opt_to_val != "#" and ras_combine != "#":
+            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, maxVal, "", opt_to_val, ras_combine))
+            in_raster.value = vtab.exportToString()
+        elif opt_from_val != "#" and opt_to_val == "#" and ras_combine != "#":
+            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, maxVal, opt_from_val, "", ras_combine))
+            in_raster.value = vtab.exportToString()
+        elif opt_from_val != "#" and opt_to_val != "#" and ras_combine != "#":
+            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine))
             in_raster.value = vtab.exportToString()
         else:
             pass
@@ -111,7 +123,7 @@ class GetSuitableLand(object):
             ras_ref = []
             i = 0
             # Get values from the generator function to show update messages
-            for ras_file, minVal, maxVal, opt_from_val, opt_to_val in self.getRowValue(in_raster, ras_max_min):
+            for ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine in self.getRowValue(in_raster, ras_max_min):
                 i += 1
                 if opt_from_val == "#":
                     in_raster.setErrorMessage("Crop optimal value \"from\" is missing")
@@ -159,7 +171,7 @@ class GetSuitableLand(object):
             num_rows = len(parameters[0].values)  # The number of rows in the table
 
             # Raster minus operation
-            for ras_file, minVal, maxVal, opt_from_val, opt_to_val in self.getRowValue(in_raster, ras_max_min):
+            for ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine in self.getRowValue(in_raster, ras_max_min):
                 i += 1
                 self.rasterMinus(ras_file, minVal, "ras_min1_" + str(i), min_ras=True)
                 self.rasterMinus(ras_file, maxVal, "ras_max1_" + str(i), min_ras=False)
@@ -172,7 +184,7 @@ class GetSuitableLand(object):
                 self.rasterCondition("ras_max1_" + str(j), "ras_max2_" + str(j), "< ", "0")
 
             # Raster divide operation
-            for ras_file, minVal, maxVal, opt_from_val, opt_to_val in self.getRowValue(in_raster, ras_max_min):
+            for ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine in self.getRowValue(in_raster, ras_max_min):
                 i += 1
                 self.rasterDivide(opt_from_val, minVal, "ras_min2_" + str(i), "ras_min3_" + str(i), min_ras=True)
                 self.rasterDivide(opt_to_val, maxVal, "ras_max2_" + str(i), "ras_max3_" + str(i), min_ras=False)
@@ -272,7 +284,7 @@ class GetSuitableLand(object):
             Returns:
                 Optimal From, Optimal To, raster file path, raster minimum value and maximum value
         """
-        for lst in in_raster.valueAsText.split(";"):
+        for i, lst in enumerate(in_raster.valueAsText.split(";")):
 
             ras_file = lst.rsplit(' ', 5)[0]  # Get raster file path
             paramInRaster = arcpy.Raster(ras_file)
@@ -283,10 +295,10 @@ class GetSuitableLand(object):
                 if lst.split()[-5] == "#" or lst.split()[-4] == "#":
                     minVal = paramInRaster.minimum  # Minimum raster value
                     maxVal = paramInRaster.maximum  # Maximum raster value
-                    yield ras_file, minVal, maxVal, opt_from_val, opt_to_val  # Return output
+                    yield ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine  # Return output
                 else:
                     minVal = lst.split()[-5]  # Minimum raster value
                     maxVal = lst.split()[-4] # Maximum raster value
-                    yield ras_file, minVal, maxVal, opt_from_val, opt_to_val
+                    yield ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine
             else:
-                yield ras_file, opt_from_val, opt_to_val
+                yield ras_file, opt_from_val, opt_to_val, ras_combine
