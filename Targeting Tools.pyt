@@ -17,6 +17,7 @@
 import arcpy
 import ntpath
 import sys
+from itertools import *
 
 arcpy.env.overwriteOutput = True
 
@@ -142,7 +143,7 @@ class GetSuitableLand(object):
                 elif float(opt_to_val) > float(maxVal):
                     in_raster.setWarningMessage("Crop optimal value {0} is greater than the maximum value {1}".format(opt_to_val, maxVal))
                 elif num_rows == 1:
-                    in_raster.setErrorMessage("Input rasters should be more than one")
+                    in_raster.setWarningMessage("One raster in place. Two are recommended")
                 else:
                     pass
                 # Get spatial reference system errors
@@ -202,14 +203,32 @@ class GetSuitableLand(object):
                 arcpy.management.Delete("in_memory\\ras_min4_" + str(j))
                 arcpy.management.Delete("in_memory\\ras_max4_" + str(j))
 
-            # Multiply minimums and maximums raster to create a suitability raster/map
-            out_ras = parameters[1].valueAsText.replace("\\","/")  # Get output file
-            out_ras_temp = arcpy.Raster("in_memory\\ras_min_max_1")  # Get the initial con file in memory
-            #  Multiply files and save output
-            for j in range(1, num_rows):
-                j += 1
-                arcpy.AddMessage("Multiplying file {0} with input raster\n".format("raster_temp_" + str(j)))
-                out_ras_temp = out_ras_temp * arcpy.Raster("in_memory\\ras_min_max_" + str(j))
+            ras_mem_file = self.setCombineFile(in_raster)  # Build a list with lists of raster files from memory
+            out_ras_temp = 1  # Initial temporary raster value
+            n = 0
+            # Overlay minimum rasters to create a suitability raster/map
+            for item in ras_mem_file:
+                if len(item) > 1:
+                    n += 1
+                    self.maxRasterValueCalc(item, n)  # Extract maximum
+                else:
+                    for f in item:
+                        arcpy.AddMessage("Multiplying file {0} with input raster\n".format(f))
+                        out_ras_temp = out_ras_temp * arcpy.Raster(f)
+
+            if arcpy.Exists(out_ras_temp):
+                arcpy.AddMessage("Saving Temporary Output\n")
+                out_ras_temp.save("in_memory\\ras_combine_temp")
+                out_ras_temp = arcpy.Raster("in_memory\\ras_combine_temp")   # Initial temporary raster file for next calculation
+
+            if n >= 1:
+                # Get temp file and multiply with maximum value statistics output saved in memory
+                for j in range(0, n):
+                    j += 1
+                    arcpy.AddMessage("Multiplying file {0} with input raster {1}\n".format("ras_combine_" + str(j), "ras_combine_temp"))
+                    out_ras_temp = out_ras_temp * arcpy.Raster("in_memory\\ras_max_stat_" + str(j))
+
+            out_ras = parameters[1].valueAsText.replace("\\","/")  # Get output file path
             arcpy.AddMessage("Saving Output\n")
             out_ras_temp.save(out_ras)
             arcpy.management.Delete("in_memory")  # Delete files in memory
@@ -276,6 +295,80 @@ class GetSuitableLand(object):
                 arcpy.gp.Divide_sa("in_memory\\" + mem_input, str(float(m_val) - float(opt_val)), "in_memory\\" + mem_output)
         arcpy.management.Delete("in_memory\\" + mem_input)
 
+    def setCombineFile(self, in_raster):
+        """ Build a list with lists of raster files from memory
+            Args:
+                in_raster: Value table parameter with rows accompanied by columns.
+            Returns:
+                ras_file_lists: List with lists of raster files from the memory
+        """
+        ras_file_lists = self.splitCombineValue(in_raster)
+        j = 0
+        for i, item in enumerate(ras_file_lists):
+            for k, val in enumerate(item):
+                j += 1
+                ras_file_lists[i][k] = "in_memory\\ras_min_max_" + str(j)  # Update lists with files from the memory
+        return ras_file_lists
+
+    def splitCombineValue(self, in_raster):
+        """ Splits lists of combine column value "No" into individual lists.
+            Args:
+                in_raster: Value table parameter with rows accompanied by columns.
+            Returns:
+                split_combine_val: Group combine values with "No" lists split into
+                individual lists
+        """
+        combine_val = self.getCombineValue(in_raster)  # Gets grouped combine values
+        split_combine_val = []
+        for item in combine_val:
+            if len(item) > 1 and item[len(item)-1] == "No":
+                for val in item:  # Add list elements "No" as individual list
+                    split_combine_val.append([val])
+            else:
+                split_combine_val.append(item)
+        return split_combine_val
+
+    def getCombineValue(self, in_raster):
+        """ Gets combine column values and groups them in a list of lists.
+            Args:
+                in_raster: Value table parameter with rows accompanied by columns.
+            Returns:
+                in_list: Grouped elements in list of lists
+        """
+        ras_max_min = False
+        combine_val = []
+        # Get combine column values
+        for ras_combine in self.getRowValue(in_raster, ras_max_min):
+            combine_val.append(ras_combine)
+        in_list = [list(g) for k, g in groupby(combine_val)]  # Group combine elements
+        for i, item in enumerate(in_list):
+            if len(in_list) > 1:
+                if len(item) == 1 and item[0] == "No":
+                    if i != len(in_list) - 1:  # Exclude last element
+                        del in_list[i]  # Delete list
+                        in_list[i].insert(0, "No")  # Insert deleted element to the next list
+                elif len(item) > 1 and item[0] == "No":
+                    in_list[i].pop()  # Remove the last element
+                elif item[0] == "Yes":
+                    in_list[i].insert(0, "No")  # Insert popped element
+                else:
+                    pass
+        return in_list
+
+    def maxRasterValueCalc(self, item, n):
+        """ Extract maximum values from minimum rasters saved in the memory
+            Args:
+                item: Raster files from the memory in a list
+            Returns: None but saves max value file in the memory
+        """
+        max_stat_files = ""
+        for ras_file in item:
+            if max_stat_files:
+                max_stat_files += ";" + ras_file
+            else:
+                max_stat_files += ras_file
+        arcpy.gp.CellStatistics_sa(max_stat_files, "in_memory\\ras_max_stat_" + str(n), "MAXIMUM", "DATA")
+
     def getRowValue(self, in_raster, ras_max_min):
         """ Gets row values and calculate raster maximum and minimum values.
             Args:
@@ -301,4 +394,4 @@ class GetSuitableLand(object):
                     maxVal = lst.split()[-4] # Maximum raster value
                     yield ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine
             else:
-                yield ras_file, opt_from_val, opt_to_val, ras_combine
+                yield ras_combine
