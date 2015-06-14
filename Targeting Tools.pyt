@@ -18,6 +18,8 @@ import arcpy
 import ntpath
 import sys
 from itertools import *
+import shutil
+import os
 
 arcpy.env.overwriteOutput = True
 
@@ -166,163 +168,185 @@ class GetSuitableLand(object):
         """Geoprocessing logic."""
 
         try:
-            in_raster = parameters[0]
-            ras_max_min = True
             i = 0
+            ras_max_min = True
+            in_raster = parameters[0]
             num_rows = len(parameters[0].values)  # The number of rows in the table
+            out_ras = parameters[1].valueAsText.replace("\\","/")  # Get output file path
+            ras_temp_path = ntpath.dirname(out_ras)
+            ras_temp_path += "/Temp/"
+
+            if not os.path.exists(ras_temp_path):  # Create new directory
+                os.makedirs(ras_temp_path)
 
             # Raster minus operation
             for ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine in self.getRowValue(in_raster, ras_max_min):
                 i += 1
-                self.rasterMinus(ras_file, minVal, "ras_min1_" + str(i), min_ras=True)
-                self.rasterMinus(ras_file, maxVal, "ras_max1_" + str(i), min_ras=False)
+                self.rasterMinus(ras_file, minVal, "ras_min1_" + str(i), ras_temp_path, min_ras=True)
+                self.rasterMinus(ras_file, maxVal, "ras_max1_" + str(i), ras_temp_path, min_ras=False)
             i = 0
 
-            # Raster condition operation
-            for j in range(0, num_rows):
-                j += 1
-                self.rasterCondition("ras_min1_" + str(j), "ras_min2_" + str(j), "< ", "0")
-                self.rasterCondition("ras_max1_" + str(j), "ras_max2_" + str(j), "< ", "0")
+            # Initializes raster condition operation
+            self.rasterConditionInit(num_rows, "ras_min1_", "ras_min2_", "ras_max1_", "ras_max2_", ras_temp_path, "< ", "0")
 
             # Raster divide operation
             for ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine in self.getRowValue(in_raster, ras_max_min):
                 i += 1
-                self.rasterDivide(opt_from_val, minVal, "ras_min2_" + str(i), "ras_min3_" + str(i), min_ras=True)
-                self.rasterDivide(opt_to_val, maxVal, "ras_max2_" + str(i), "ras_max3_" + str(i), min_ras=False)
+                self.rasterDivide(opt_from_val, minVal, "ras_min2_" + str(i), "ras_min3_" + str(i), ras_temp_path, min_ras=True)
+                self.rasterDivide(opt_to_val, maxVal, "ras_max2_" + str(i), "ras_max3_" + str(i), ras_temp_path, min_ras=False)
 
-            for j in range(0, num_rows):
-                j += 1
-                self.rasterCondition("ras_min3_" + str(j), "ras_min4_" + str(j), "> ", "1")
-                self.rasterCondition("ras_max3_" + str(j), "ras_max4_" + str(j), "> ", "1")
+            # Initializes raster condition operation
+            self.rasterConditionInit(num_rows, "ras_min3_", "ras_min4_", "ras_max3_", "ras_max4_", ras_temp_path, "> ", "1")
 
             # Calculate minimum rasters from the minimums and maximums calculation outputs
             for j in range(0, num_rows):
                 j += 1
                 arcpy.AddMessage("Generating minimum values for {0} and {1}\n".format("ras_min4_" + str(j), "ras_max4_" + str(j)))
-                arcpy.gp.CellStatistics_sa("in_memory\\ras_min4_" + str(j) + ";" + "in_memory\\ras_max4_" + str(j), "in_memory\\ras_min_max_" + str(j), "MINIMUM", "DATA")
-                arcpy.management.Delete("in_memory\\ras_min4_" + str(j))
-                arcpy.management.Delete("in_memory\\ras_max4_" + str(j))
+                arcpy.gp.CellStatistics_sa(ras_temp_path + "ras_min4_" + str(j) + ";" + ras_temp_path + "ras_max4_" + str(j), ras_temp_path + "ras_MnMx_" + str(j), "MINIMUM", "DATA")
+                arcpy.management.Delete(ras_temp_path + "ras_min4_" + str(j))
+                arcpy.management.Delete(ras_temp_path + "ras_max4_" + str(j))
 
-            ras_mem_file = self.setCombineFile(in_raster)  # Build a list with lists of raster files from memory
+            ras_temp_file = self.setCombineFile(in_raster, ras_temp_path)  # Build a list with lists of temporary raster files
             out_ras_temp = 1  # Initial temporary raster value
             n = 0
             # Overlay minimum rasters to create a suitability raster/map
-            for item in ras_mem_file:
+            for item in ras_temp_file:
                 if len(item) > 1:
                     n += 1
-                    self.maxRasterValueCalc(item, n)  # Extract maximum
+                    self.maxRasterValueCalc(item, ras_temp_path, n)  # Extract maximum
                 else:
                     for f in item:
-                        arcpy.AddMessage("Multiplying file {0} with input raster\n".format(f))
+                        arcpy.AddMessage("Multiplying file {0} with input raster\n".format(ntpath.basename(f)))
                         out_ras_temp = out_ras_temp * arcpy.Raster(f)
 
             if arcpy.Exists(out_ras_temp):
                 arcpy.AddMessage("Saving Temporary Output\n")
-                out_ras_temp.save("in_memory\\ras_combine_temp")
-                out_ras_temp = arcpy.Raster("in_memory\\ras_combine_temp")   # Initial temporary raster file for next calculation
+                out_ras_temp.save(ras_temp_path + "rs_TxTemp")
+                out_ras_temp = arcpy.Raster(ras_temp_path + "rs_TxTemp")   # Initial temporary raster file for the next calculation
 
             if n >= 1:
-                # Get temp file and multiply with maximum value statistics output saved in memory
+                # Get times temp file and multiply with maximum value statistics output saved in a temporary directory
                 for j in range(0, n):
                     j += 1
-                    arcpy.AddMessage("Multiplying file {0} with input raster {1}\n".format("ras_combine_" + str(j), "ras_combine_temp"))
-                    out_ras_temp = out_ras_temp * arcpy.Raster("in_memory\\ras_max_stat_" + str(j))
+                    arcpy.AddMessage("Multiplying file {0} with input raster {1}\n".format(out_ras_temp, "rs_MxStat_" + str(j)))
+                    out_ras_temp = out_ras_temp * arcpy.Raster(ras_temp_path + "rs_MxStat_" + str(j))
 
-            out_ras = parameters[1].valueAsText.replace("\\","/")  # Get output file path
             arcpy.AddMessage("Saving Output\n")
             out_ras_temp.save(out_ras)
-            arcpy.management.Delete("in_memory")  # Delete files in memory
+            arcpy.AddMessage("Deleting temporary folder\n")
+            shutil.rmtree(ras_temp_path)
             arcpy.AddMessage("Output saved!\n")
             return
         except Exception as ex:
             arcpy.AddMessage('ERROR: {0}'.format(ex))
 
-    def rasterMinus(self, ras_file, val, mem_output, min_ras):
+    def rasterMinus(self, ras_file, val, ras_output, ras_temp_path, min_ras):
         """ Handles raster minus operation
             Args:
                 ras_file: Input raster file
                 val: Minimum and maximum value
-                mem_output: Raster file output to memory space
+                ras_output: Raster file output
                 min: Boolean to determine if minimum value is available or not
             Return:
                 Raster layer
         """
         if min_ras:
             arcpy.AddMessage("Calculating {0} - {1}\n".format(ntpath.basename(ras_file), val))
-            arcpy.gp.Minus_sa(ras_file, val, "in_memory\\" + mem_output)
+            arcpy.gp.Minus_sa(ras_file, val, ras_temp_path + ras_output)
         else:
             arcpy.AddMessage("Calculating {0} - {1}\n".format(val, ntpath.basename(ras_file)))
-            arcpy.gp.Minus_sa(val, ras_file, "in_memory\\" + mem_output)
+            arcpy.gp.Minus_sa(val, ras_file, ras_temp_path + ras_output)
 
-    def rasterCondition(self, mem_input, mem_output, comp_oper, comp_val):
-        """ Handles raster condition operation
+    def rasterConditionInit(self, num_rows, ras_min_input, ras_min_output, ras_max_input, ras_max_output, ras_temp_path, comp_oper, comp_val):
+        """ Initializes raster condition operation
             Args:
-                mem_input: Input raster from memory space
-                mem_output: Raster file output to memory space
+                num_rows: Number of rows in the value table
+                ras_min_input: Raster file input
+                ras_min_output: Raster file output
+                ras_max_input: Raster file input
+                ras_max_output: Raster file output
+                ras_temp_path: Temporary directory path
                 comp_oper: Comparison operator
                 comp_val: Comparison value
             Return:
+                None
+        """
+        for j in range(0, num_rows):
+            j += 1
+            self.rasterCondition(ras_min_input + str(j), ras_min_output + str(j), ras_temp_path, comp_oper, comp_val)
+            self.rasterCondition(ras_max_input + str(j), ras_max_output + str(j), ras_temp_path, comp_oper, comp_val)
+
+    def rasterCondition(self, ras_input, ras_output, ras_temp_path, comp_oper, comp_val):
+        """ Handles raster condition operation
+            Args:
+                ras_input: Raster file input
+                ras_output: Raster file output
+                ras_temp_path: Temporary directory path
+                comp_oper: Comparison operator
+                comp_val: Comparison value
+
+            Return:
                 Raster layer
         """
-        arcpy.AddMessage("Creating conditional output for {0}\n".format(mem_input))
-        arcpy.gp.Con_sa("in_memory\\" + mem_input, comp_val, "in_memory\\" + mem_output, "in_memory\\" + mem_input, "\"Value\" " + comp_oper + comp_val)
-        arcpy.management.Delete("in_memory\\" + mem_input)  # Delete files in memory
+        arcpy.AddMessage("Creating conditional output for {0}\n".format(ras_input))
+        arcpy.gp.Con_sa(ras_temp_path + ras_input, comp_val, ras_temp_path + ras_output, ras_temp_path + ras_input, "\"Value\" " + comp_oper + comp_val)
+        arcpy.management.Delete(ras_temp_path + ras_input)  # Delete files in memory
 
-    def rasterDivide(self, opt_val, m_val, mem_input, mem_output, min_ras):
+    def rasterDivide(self, opt_val, m_val, ras_input, ras_output, ras_temp_path, min_ras):
         """ Handles raster divide operation
             Args:
                 opt_val: Optimal From aor Optimal To value
                 m_val: Maximum or minimum value
-                mem_input: Input raster from memory space
-                mem_output: Raster file output to memory space
+                ras_input: Input raster file
+                ras_output: Raster file output
                 min: Boolean to determine if minimum value is available or not
             Return:
                 Raster layer
         """
         if min_ras:
             if float(opt_val) - float(m_val) == 0:
-                arcpy.AddMessage("Calculating {0} / {1}\n".format(mem_input, "1"))
-                arcpy.gp.Divide_sa("in_memory\\" + mem_input, "1", "in_memory\\" + mem_output)
+                arcpy.AddMessage("Calculating {0} / {1}\n".format(ras_input, "1"))
+                arcpy.gp.Divide_sa(ras_temp_path + ras_input, "1", ras_temp_path + ras_output)
             else:
-                arcpy.AddMessage("Calculating {0} / {1} - {2}\n".format(mem_input, opt_val, m_val))
-                arcpy.gp.Divide_sa("in_memory\\" + mem_input, str(float(opt_val) - float(m_val)), "in_memory\\" + mem_output)
+                arcpy.AddMessage("Calculating {0} / {1} - {2}\n".format(ras_input, opt_val, m_val))
+                arcpy.gp.Divide_sa(ras_temp_path + ras_input, str(float(opt_val) - float(m_val)), ras_temp_path + ras_output)
         else:
             if float(m_val) - float(opt_val) == 0:
-                arcpy.AddMessage("Calculating {0} / {1}\n".format(mem_input, "1"))
-                arcpy.gp.Divide_sa("in_memory\\" + mem_input, "1", "in_memory\\" + mem_output)
+                arcpy.AddMessage("Calculating {0} / {1}\n".format(ras_input, "1"))
+                arcpy.gp.Divide_sa(ras_temp_path + ras_input, "1", ras_temp_path + ras_output)
             else:
-                arcpy.AddMessage("Calculating {0} / {1} - {2}\n".format(mem_input, m_val, opt_val))
-                arcpy.gp.Divide_sa("in_memory\\" + mem_input, str(float(m_val) - float(opt_val)), "in_memory\\" + mem_output)
-        arcpy.management.Delete("in_memory\\" + mem_input)
+                arcpy.AddMessage("Calculating {0} / {1} - {2}\n".format(ras_input, m_val, opt_val))
+                arcpy.gp.Divide_sa(ras_temp_path + ras_input, str(float(m_val) - float(opt_val)), ras_temp_path + ras_output)
+        arcpy.management.Delete(ras_temp_path + ras_input)
 
-    def setCombineFile(self, in_raster):
-        """ Build a list with lists of raster files from memory
+    def setCombineFile(self, in_raster, ras_temp_path):
+        """ Build a list with lists of temporary raster files
             Args:
                 in_raster: Value table parameter with rows accompanied by columns.
             Returns:
-                ras_file_lists: List with lists of raster files from the memory
+                ras_file_lists: List with lists of temporary raster
         """
-        ras_file_lists = self.splitCombineValue(in_raster)
+        ras_file_lists = self.splitCombineValue(in_raster)  # Splits lists of combine column value "no"
         j = 0
         for i, item in enumerate(ras_file_lists):
             for k, val in enumerate(item):
                 j += 1
-                ras_file_lists[i][k] = "in_memory\\ras_min_max_" + str(j)  # Update lists with files from the memory
+                ras_file_lists[i][k] = ras_temp_path + "ras_MnMx_" + str(j)  # Update lists with temporary files
         return ras_file_lists
 
     def splitCombineValue(self, in_raster):
-        """ Splits lists of combine column value "No" into individual lists.
+        """ Splits lists of combine column value "no" into individual lists.
             Args:
                 in_raster: Value table parameter with rows accompanied by columns.
             Returns:
-                split_combine_val: Group combine values with "No" lists split into
+                split_combine_val: Group combine values with "no" lists split into
                 individual lists
         """
         combine_val = self.getCombineValue(in_raster)  # Gets grouped combine values
         split_combine_val = []
         for item in combine_val:
-            if len(item) > 1 and item[len(item)-1] == "No":
-                for val in item:  # Add list elements "No" as individual list
+            if len(item) > 1 and item[len(item)-1] == "no":
+                for val in item:  # Add list elements "no" as individual list
                     split_combine_val.append([val])
             else:
                 split_combine_val.append(item)
@@ -339,27 +363,27 @@ class GetSuitableLand(object):
         combine_val = []
         # Get combine column values
         for ras_combine in self.getRowValue(in_raster, ras_max_min):
-            combine_val.append(ras_combine)
+            combine_val.append(ras_combine.lower())
         in_list = [list(g) for k, g in groupby(combine_val)]  # Group combine elements
         for i, item in enumerate(in_list):
             if len(in_list) > 1:
-                if len(item) == 1 and item[0] == "No":
+                if len(item) == 1 and item[0] == "no":
                     if i != len(in_list) - 1:  # Exclude last element
                         del in_list[i]  # Delete list
-                        in_list[i].insert(0, "No")  # Insert deleted element to the next list
-                elif len(item) > 1 and item[0] == "No":
+                        in_list[i].insert(0, "no")  # Insert deleted element to the next list
+                elif len(item) > 1 and item[0] == "no":
                     in_list[i].pop()  # Remove the last element
-                elif item[0] == "Yes":
-                    in_list[i].insert(0, "No")  # Insert popped element
+                elif item[0] == "yes":
+                    in_list[i].insert(0, "no")  # Insert popped element
                 else:
                     pass
         return in_list
 
-    def maxRasterValueCalc(self, item, n):
-        """ Extract maximum values from minimum rasters saved in the memory
+    def maxRasterValueCalc(self, item, ras_temp_path, n):
+        """ Extract maximum values from minimum temporary rasters
             Args:
-                item: Raster files from the memory in a list
-            Returns: None but saves max value file in the memory
+                item: Temporary raster files
+            Returns: Saves maximum value raster in a temporary directory
         """
         max_stat_files = ""
         for ras_file in item:
@@ -367,7 +391,8 @@ class GetSuitableLand(object):
                 max_stat_files += ";" + ras_file
             else:
                 max_stat_files += ras_file
-        arcpy.gp.CellStatistics_sa(max_stat_files, "in_memory\\ras_max_stat_" + str(n), "MAXIMUM", "DATA")
+        arcpy.AddMessage("Generating maximum values from minimum values raster files")
+        arcpy.gp.CellStatistics_sa(max_stat_files, ras_temp_path + "rs_MxStat_" + str(n), "MAXIMUM", "DATA")
 
     def getRowValue(self, in_raster, ras_max_min):
         """ Gets row values and calculate raster maximum and minimum values.
