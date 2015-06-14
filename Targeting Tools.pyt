@@ -85,7 +85,7 @@ class GetSuitableLand(object):
             vtab = arcpy.ValueTable(len(in_raster.columns))  # Number of value table columns
             ras_max_min = True
             # Get values from the generator function and update value table
-            for ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine in self.getRowValue(in_raster, ras_max_min):
+            for ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine, row_count in self.getRowValue(in_raster, ras_max_min):
                 self.updateValueTable(in_raster, opt_from_val, opt_to_val, ras_combine, vtab, ras_file, minVal, maxVal)
         return
 
@@ -129,14 +129,16 @@ class GetSuitableLand(object):
             ras_ref = []
             i = 0
             # Get values from the generator function to show update messages
-            for ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine in self.getRowValue(in_raster, ras_max_min):
+            for ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine, row_count in self.getRowValue(in_raster, ras_max_min):
                 i += 1
                 if opt_from_val == "#":
-                    in_raster.setErrorMessage("Crop optimal value \"from\" is missing")
+                    in_raster.setErrorMessage("Crop \"Optimal From\" value is missing")
                 elif opt_to_val == "#":
-                    in_raster.setErrorMessage("Crop optimal value \"to\" is missing")
-                elif opt_to_val and opt_from_val == "#":
-                    in_raster.setErrorMessage("Crop optimal value \"to\" and \"from\" are missing")
+                    in_raster.setErrorMessage("Crop \"Optimal To\" value is missing")
+                elif ras_combine == "#":
+                    in_raster.setErrorMessage("Layer \"Combine\" value is missing")
+                elif opt_to_val == "#" and opt_from_val == "#" and ras_combine == "#":
+                    in_raster.setErrorMessage("Crop \"Optimal From\", \"Optimal To\" and layer \"Combine\" values are missing")
                 elif float(opt_from_val) < float(minVal):
                     in_raster.setWarningMessage("Crop optimal value {0} is less than the minimum value {1}".format(opt_from_val, minVal))
                 elif float(opt_from_val) > float(maxVal):
@@ -147,6 +149,11 @@ class GetSuitableLand(object):
                     in_raster.setErrorMessage("Crop optimal value {0} is less than the minimum value {1}".format(opt_to_val, minVal))
                 elif float(opt_to_val) > float(maxVal):
                     in_raster.setWarningMessage("Crop optimal value {0} is greater than the maximum value {1}".format(opt_to_val, maxVal))
+                elif ras_combine.lower() != "yes":
+                    if ras_combine.lower() != "no":
+                        in_raster.setErrorMessage("Layer \"Combine\" field expects \"Yes\" or \"No\" input value")
+                elif row_count == 0 and ras_combine.lower() != "no":
+                    in_raster.setErrorMessage("The first \"Combine\" value should ONLY be \"No\"")
                 elif num_rows == 1:
                     in_raster.setWarningMessage("One raster in place. Two are recommended")
                 else:
@@ -183,7 +190,7 @@ class GetSuitableLand(object):
                 os.makedirs(ras_temp_path)
 
             # Raster minus operation
-            for ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine in self.getRowValue(in_raster, ras_max_min):
+            for ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine, row_count in self.getRowValue(in_raster, ras_max_min):
                 i += 1
                 self.rasterMinus(ras_file, minVal, "ras_min1_" + str(i), ras_temp_path, min_ras=True)
                 self.rasterMinus(ras_file, maxVal, "ras_max1_" + str(i), ras_temp_path, min_ras=False)
@@ -193,7 +200,7 @@ class GetSuitableLand(object):
             self.rasterConditionInit(num_rows, "ras_min1_", "ras_min2_", "ras_max1_", "ras_max2_", ras_temp_path, "< ", "0")
 
             # Raster divide operation
-            for ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine in self.getRowValue(in_raster, ras_max_min):
+            for ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine, row_count in self.getRowValue(in_raster, ras_max_min):
                 i += 1
                 self.rasterDivide(opt_from_val, minVal, "ras_min2_" + str(i), "ras_min3_" + str(i), ras_temp_path, min_ras=True)
                 self.rasterDivide(opt_to_val, maxVal, "ras_max2_" + str(i), "ras_max3_" + str(i), ras_temp_path, min_ras=False)
@@ -412,14 +419,15 @@ class GetSuitableLand(object):
             opt_from_val = lst.split()[-3]  # Get crop optimum value from
             opt_to_val = lst.split()[-2]  # Get crop optimum value to
             ras_combine = lst.split()[-1]  # Get combine option
+            row_count = i
             if ras_max_min:
                 if lst.split()[-5] == "#" or lst.split()[-4] == "#":
                     minVal = paramInRaster.minimum  # Minimum raster value
                     maxVal = paramInRaster.maximum  # Maximum raster value
-                    yield ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine  # Return output
+                    yield ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine, row_count  # Return output
                 else:
                     minVal = lst.split()[-5]  # Minimum raster value
-                    maxVal = lst.split()[-4] # Maximum raster value
-                    yield ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine
+                    maxVal = lst.split()[-4]  # Maximum raster value
+                    yield ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine, row_count
             else:
                 yield ras_combine
