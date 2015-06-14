@@ -186,7 +186,7 @@ class GetSuitableLand(object):
                 self.rasterMinus(ras_file, maxVal, "ras_max1_" + str(i), ras_temp_path, min_ras=False)
             i = 0
 
-            # Initializes raster condition operation
+            # Initialize raster condition operation
             self.rasterConditionInit(num_rows, "ras_min1_", "ras_min2_", "ras_max1_", "ras_max2_", ras_temp_path, "< ", "0")
 
             # Raster divide operation
@@ -195,7 +195,7 @@ class GetSuitableLand(object):
                 self.rasterDivide(opt_from_val, minVal, "ras_min2_" + str(i), "ras_min3_" + str(i), ras_temp_path, min_ras=True)
                 self.rasterDivide(opt_to_val, maxVal, "ras_max2_" + str(i), "ras_max3_" + str(i), ras_temp_path, min_ras=False)
 
-            # Initializes raster condition operation
+            # Initialize raster condition operation
             self.rasterConditionInit(num_rows, "ras_min3_", "ras_min4_", "ras_max3_", "ras_max4_", ras_temp_path, "> ", "1")
 
             # Calculate minimum rasters from the minimums and maximums calculation outputs
@@ -290,7 +290,7 @@ class GetSuitableLand(object):
         """
         arcpy.AddMessage("Creating conditional output for {0}\n".format(ras_input))
         arcpy.gp.Con_sa(ras_temp_path + ras_input, comp_val, ras_temp_path + ras_output, ras_temp_path + ras_input, "\"Value\" " + comp_oper + comp_val)
-        arcpy.management.Delete(ras_temp_path + ras_input)  # Delete files in memory
+        arcpy.management.Delete(ras_temp_path + ras_input)  # Delete temporary raster files
 
     def rasterDivide(self, opt_val, m_val, ras_input, ras_output, ras_temp_path, min_ras):
         """ Handles raster divide operation
