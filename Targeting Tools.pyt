@@ -5,7 +5,10 @@
                 Commonwealth Scientific and Industrial Research Organisation - CSIRO
 
     Notes:      Tool-1: Identify land suitable to cultivate a certain crop.
-                Tool-2: Identify areas that have similar biophysical characteristics to the location currently under cropping.
+                Tool-2: Identify areas that have similar biophysical characteristics to
+                        the location currently under a certain type crop.
+                Tool-3: Calculate statistics of a raster and return the result in a CSV
+                        file format.
 
                 Fully tested in ArcGIS 10.1.
                 Requires Spatial Analyst extension
