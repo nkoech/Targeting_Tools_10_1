@@ -1,13 +1,13 @@
 Targeting Tools
 ===============
 
-Crop Suitability toolbox is an ArcGIS toolbox (.pyt) purely developed using Python programming language. The toolbox has three tools that were developed with an aim of identifying land that is suitable for a certain crop to grow based on user criteria. The three tools are:
+Targeting toolbox is an ArcGIS toolbox (.pyt) purely developed using Python programming language. The toolbox has three tools that were developed with an aim of identifying land that is suitable for a certain crop to grow based on user criteria. The three tools are:
 
 * **Land Suitability:** This tool can be used to identify areas that ,are suitable for planting a certain type of crop as per the user criteria. Please click on the **Help Tool button** once you install the toolbox in an ArcGIS environment to get information on how to use it.
 
 * **Land Match:** A tool that can be used to find suitable sites that are similar to already existing farmlands under a certain type of crop. This tool is still **under development** and will be shared soon.
 
-* **Target Statistics:** This tool would be expeceted to calculate statistics on values of the output rasters of the above mentioned tools. **To be realeased soon**.
+* **Target Statistics:** This tool is expeceted to calculate statistics on values of the output rasters from the two tools mentioned above. **To be realeased soon**.
 
 
 ## Tool Specifications
