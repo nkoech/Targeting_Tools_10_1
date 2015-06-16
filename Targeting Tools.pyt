@@ -413,9 +413,8 @@ class GetSuitableLand(object):
                 Optimal From, Optimal To, raster file path, raster minimum value and maximum value
         """
         for i, lst in enumerate(in_raster.valueAsText.split(";")):
-
             ras_file = lst.rsplit(' ', 5)[0]  # Get raster file path
-            paramInRaster = arcpy.Raster(ras_file)
+            paramInRaster = arcpy.Raster(ras_file.replace("'", ""))
             opt_from_val = lst.split()[-3]  # Get crop optimum value from
             opt_to_val = lst.split()[-2]  # Get crop optimum value to
             ras_combine = lst.split()[-1]  # Get combine option
