@@ -17,14 +17,15 @@
     Modified:   June 2015
 """
 
-import arcpy
-import ntpath
-import sys
-from itertools import *
-import shutil
 import os
+import sys
+import arcpy
+import shutil
+import ntpath
+from itertools import *
 
 arcpy.env.overwriteOutput = True
+
 
 def parameter(displayName, name, datatype, parameterType='Required', direction='Input', multiValue=False):
     param = arcpy.Parameter(
@@ -61,7 +62,7 @@ class GetSuitableLand(object):
 
     def getParameterInfo(self):
         """Define parameter definitions"""
-        self.parameters[0].columns = [['Raster Layer', 'Rasters'], ['Double', 'Min Value'], ['Double', 'Max Value'], ['Double', 'Optimal From'], ['Double', 'Optimal To'], ['String', 'Combine']]
+        self.parameters[0].columns = [['Raster Layer', 'Rasters'], ['Double', 'Min Value'], ['Double', 'Max Value'], ['Double', 'Optimal From'], ['Double', 'Optimal To'], ['String', 'Combine-Yes/No']]
         return self.parameters
 
     def isLicensed(self):
@@ -76,12 +77,15 @@ class GetSuitableLand(object):
         return spatialAnalystCheckedOut
 
     def updateParameters(self, parameters):
-        """Modify the values and properties of parameters before internal
-        validation is performed.  This method is called whenever a parameter
-        has been changed."""
-
+        """ Modify the values and properties of parameters before internal
+            validation is performed.  This method is called whenever a parameter
+            has been changed.
+            Args:
+                parameters: Parameters from the tool.
+            Returns: Parameter values.
+        """
         if parameters[0].value:
-            in_raster = parameters[0]
+            in_raster = parameters[0]  # Raster from the value table
             vtab = arcpy.ValueTable(len(in_raster.columns))  # Number of value table columns
             ras_max_min = True
             # Get values from the generator function and update value table
@@ -90,27 +94,39 @@ class GetSuitableLand(object):
         return
 
     def updateValueTable(self, in_raster, opt_from_val, opt_to_val, ras_combine, vtab, ras_file, minVal, maxVal):
+        """ Update value parameters in the tool.
+            Args:
+                in_raster: Raster inputs
+                opt_from_val: Optimal From value
+                opt_to_val: Optimal To value
+                ras_combine: Combine value
+                vtab: Number of value table columns
+                ras_file: Raster file path
+                minVal: Minimum raster data value
+                maxVal: Maximum raster data value
+            Returns: Updated value table values.
+        """
         # End of value table, now update update value table last row with new column data
         if opt_from_val == "#" and opt_to_val == "#" and ras_combine == "#":
-            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, maxVal, "", "", ""))
+            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, maxVal, "#", "#", "#"))
             in_raster.value = vtab.exportToString()
         elif opt_from_val != "#" and opt_to_val == "#" and ras_combine == "#":
-            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, maxVal, opt_from_val, "", ""))
+            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, maxVal, opt_from_val, "#", "#"))
             in_raster.value = vtab.exportToString()
         elif opt_from_val == "#" and opt_to_val != "#" and ras_combine == "#":
-            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, maxVal, "", opt_to_val, ""))
+            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, maxVal, "#", opt_to_val, "#"))
             in_raster.value = vtab.exportToString()
         elif opt_from_val == "#" and opt_to_val == "#" and ras_combine != "#":
-            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, maxVal, "", "", ras_combine))
+            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, maxVal, "#", "#", ras_combine))
             in_raster.value = vtab.exportToString()
         elif opt_from_val != "#" and opt_to_val != "#" and ras_combine == "#":
-            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, maxVal, opt_from_val, opt_to_val, ""))
+            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, maxVal, opt_from_val, opt_to_val, "#"))
             in_raster.value = vtab.exportToString()
         elif opt_from_val == "#" and opt_to_val != "#" and ras_combine != "#":
-            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, maxVal, "", opt_to_val, ras_combine))
+            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, maxVal, "#", opt_to_val, ras_combine))
             in_raster.value = vtab.exportToString()
         elif opt_from_val != "#" and opt_to_val == "#" and ras_combine != "#":
-            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, maxVal, opt_from_val, "", ras_combine))
+            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, maxVal, opt_from_val, "#", ras_combine))
             in_raster.value = vtab.exportToString()
         elif opt_from_val != "#" and opt_to_val != "#" and ras_combine != "#":
             vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine))
@@ -119,9 +135,12 @@ class GetSuitableLand(object):
             pass
 
     def updateMessages(self, parameters):
-        """Modify the messages created by internal validation for each tool
-        parameter.  This method is called after internal validation."""
-
+        """ Modify the messages created by internal validation for each tool
+            parameter.  This method is called after internal validation.
+            Args:
+                parameters: Parameters from the tool.
+            Returns: Internal validation messages.
+        """
         if parameters[0].value:
             in_raster = parameters[0]
             num_rows = len(in_raster.values)  # The number of rows in the table
@@ -175,19 +194,23 @@ class GetSuitableLand(object):
         return
 
     def execute(self, parameters, messages):
-        """Geoprocessing logic."""
-
+        """ Execute functions to process input raster.
+            Args:
+                parameters: Parameters from the tool.
+                messages: Internal validation messages
+            Returns: Land suitability raster.
+        """
         try:
             i = 0
             ras_max_min = True
             in_raster = parameters[0]
             num_rows = len(parameters[0].values)  # The number of rows in the table
             out_ras = parameters[1].valueAsText.replace("\\","/")  # Get output file path
-            ras_temp_path = ntpath.dirname(out_ras)
+            ras_temp_path = ntpath.dirname(out_ras)  # Get path without file name
             ras_temp_path += "/Temp/"
 
-            if not os.path.exists(ras_temp_path):  # Create new directory
-                os.makedirs(ras_temp_path)
+            if not os.path.exists(ras_temp_path):
+                os.makedirs(ras_temp_path)  # Create new directory
 
             # Raster minus operation
             for ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine, row_count in self.getRowValue(in_raster, ras_max_min):
@@ -223,7 +246,8 @@ class GetSuitableLand(object):
             for item in ras_temp_file:
                 if len(item) > 1:
                     n += 1
-                    self.maxRasterValueCalc(item, ras_temp_path, n)  # Extract maximum
+                    arcpy.AddMessage("Generating maximum values from minimum values raster files")
+                    arcpy.gp.CellStatistics_sa(item, ras_temp_path + "rs_MxStat_" + str(n), "MAXIMUM", "DATA")
                 else:
                     for f in item:
                         arcpy.AddMessage("Multiplying file {0} with input raster\n".format(ntpath.basename(f)))
@@ -232,7 +256,7 @@ class GetSuitableLand(object):
             if arcpy.Exists(out_ras_temp):
                 arcpy.AddMessage("Saving Temporary Output\n")
                 out_ras_temp.save(ras_temp_path + "rs_TxTemp")
-                out_ras_temp = arcpy.Raster(ras_temp_path + "rs_TxTemp")   # Initial temporary raster file for the next calculation
+                out_ras_temp = arcpy.Raster(ras_temp_path + "rs_TxTemp")  # Initial temporary raster file for the next calculation
 
             if n >= 1:
                 # Get times temp file and multiply with maximum value statistics output saved in a temporary directory
@@ -256,9 +280,9 @@ class GetSuitableLand(object):
                 ras_file: Input raster file
                 val: Minimum and maximum value
                 ras_output: Raster file output
-                min: Boolean to determine if minimum value is available or not
-            Return:
-                Raster layer
+                ras_temp_path: Temporary directory path
+                min_ras: Boolean to determine if minimum value is available or not
+            Return: Raster layer output
         """
         if min_ras:
             arcpy.AddMessage("Calculating {0} - {1}\n".format(ntpath.basename(ras_file), val))
@@ -296,7 +320,7 @@ class GetSuitableLand(object):
                 comp_val: Comparison value
 
             Return:
-                Raster layer
+                Raster layer output
         """
         arcpy.AddMessage("Creating conditional output for {0}\n".format(ras_input))
         arcpy.gp.Con_sa(ras_temp_path + ras_input, comp_val, ras_temp_path + ras_output, ras_temp_path + ras_input, "\"Value\" " + comp_oper + comp_val)
@@ -309,9 +333,10 @@ class GetSuitableLand(object):
                 m_val: Maximum or minimum value
                 ras_input: Input raster file
                 ras_output: Raster file output
-                min: Boolean to determine if minimum value is available or not
+                ras_temp_path: Temporary directory path
+                min_ras: Boolean to determine if minimum value is available or not
             Return:
-                Raster layer
+                Raster layer output
         """
         if min_ras:
             if float(opt_val) - float(m_val) == 0:
@@ -333,6 +358,7 @@ class GetSuitableLand(object):
         """ Build a list with lists of temporary raster files
             Args:
                 in_raster: Value table parameter with rows accompanied by columns.
+                ras_temp_path: Temporary directory path
             Returns:
                 ras_file_lists: List with lists of temporary raster
         """
@@ -389,21 +415,6 @@ class GetSuitableLand(object):
                     pass
         return in_list
 
-    def maxRasterValueCalc(self, item, ras_temp_path, n):
-        """ Extract maximum values from minimum temporary rasters
-            Args:
-                item: Temporary raster files
-            Returns: Saves maximum value raster in a temporary directory
-        """
-        max_stat_files = ""
-        for ras_file in item:
-            if max_stat_files:
-                max_stat_files += ";" + ras_file
-            else:
-                max_stat_files += ras_file
-        arcpy.AddMessage("Generating maximum values from minimum values raster files")
-        arcpy.gp.CellStatistics_sa(max_stat_files, ras_temp_path + "rs_MxStat_" + str(n), "MAXIMUM", "DATA")
-
     def getRowValue(self, in_raster, ras_max_min):
         """ Gets row values and calculate raster maximum and minimum values.
             Args:
@@ -420,9 +431,10 @@ class GetSuitableLand(object):
             ras_combine = lst.split()[-1]  # Get combine option
             row_count = i
             if ras_max_min:
-                if lst.split()[-5] == "#" or lst.split()[-4] == "#":
+                if lst.split()[-5] == "#" or lst.split()[-4] == "#" or ras_combine == "#":
                     minVal = paramInRaster.minimum  # Minimum raster value
                     maxVal = paramInRaster.maximum  # Maximum raster value
+                    ras_combine = "No"
                     yield ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine, row_count  # Return output
                 else:
                     minVal = lst.split()[-5]  # Minimum raster value
