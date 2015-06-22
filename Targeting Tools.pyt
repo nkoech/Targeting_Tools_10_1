@@ -22,6 +22,7 @@ import sys
 import arcpy
 import shutil
 import ntpath
+from itertools import *
 
 arcpy.env.overwriteOutput = True
 
@@ -269,6 +270,12 @@ class GetSuitableLand(object):
             arcpy.AddMessage("Deleting temporary folder\n")
             shutil.rmtree(ras_temp_path)
             arcpy.AddMessage("Output saved!\n")
+
+            mxd = arcpy.mapping.MapDocument("CURRENT")
+            df = arcpy.mapping.ListDataFrames(mxd)[0]
+            result = arcpy.MakeRasterLayer_management(out_ras, "Suitable_Land")
+            layer = result.getOutput(0)
+            arcpy.mapping.AddLayer(df, layer, 'AUTO_ARRANGE')
             return
         except Exception as ex:
             arcpy.AddMessage('ERROR: {0}'.format(ex))
