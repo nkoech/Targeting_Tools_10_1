@@ -22,7 +22,6 @@ import sys
 import arcpy
 import shutil
 import ntpath
-from itertools import *
 
 arcpy.env.overwriteOutput = True
 
