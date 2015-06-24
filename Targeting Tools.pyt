@@ -269,13 +269,13 @@ class GetSuitableLand(object):
             out_ras_temp.save(out_ras)
             arcpy.AddMessage("Deleting temporary folder\n")
             shutil.rmtree(ras_temp_path)
-            arcpy.AddMessage("Output saved!\n")
+            arcpy.AddMessage("xxx Output saved!\n")
 
+            # Load data to current map document data frame
             mxd = arcpy.mapping.MapDocument("CURRENT")
-            df = arcpy.mapping.ListDataFrames(mxd)[0]
-            result = arcpy.MakeRasterLayer_management(out_ras, "Suitable_Land")
-            layer = result.getOutput(0)
-            arcpy.mapping.AddLayer(df, layer, 'AUTO_ARRANGE')
+            df = arcpy.mapping.ListDataFrames(mxd, "*")[0]
+            lyr = arcpy.mapping.Layer(out_ras)
+            arcpy.mapping.AddLayer(df, lyr, "AUTO_ARRANGE")
             return
         except Exception as ex:
             arcpy.AddMessage('ERROR: {0}'.format(ex))
