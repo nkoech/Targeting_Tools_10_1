@@ -57,7 +57,7 @@ class GetSuitableLand(object):
         self.canRunInBackground = False
         self.parameters = [
             parameter("Input Rasters", "in_raster", "Value Table"),
-            parameter("Feature Zone Data", "in_fzone", "Feature Class", parameterType='Optional'),
+            parameter("Feature Zone Data", "in_fczone", "Feature Class", parameterType='Optional'),
             parameter("Use feature zone data as mask", "p_mask", "Boolean", parameterType='Optional'),
             parameter("Output Statistics Feature Class", "out_fstat", 'Feature Class', parameterType='Optional', direction='Output'),
             parameter("Output Raster", "out_raster", 'Raster Layer', direction='Output')
@@ -224,15 +224,17 @@ class GetSuitableLand(object):
             if not os.path.exists(ras_temp_path):
                 os.makedirs(ras_temp_path)  # Create new directory
 
-            # Raster minus operation
-            for ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine, row_count in self.getRowValue(in_raster, ras_max_min):
-                i += 1
-                self.rasterMinus(ras_file, minVal, "ras_min1_" + str(i), ras_temp_path, min_ras=True)
-                self.rasterMinus(ras_file, maxVal, "ras_max1_" + str(i), ras_temp_path, min_ras=False)
-            i = 0
+            if parameters[1].value:
+                in_fc = parameters[1].valueAsText.replace("\\","/")  # Get input feature class path
+                if parameters[2].value == True:  # Check if mask is true
+                    extent = arcpy.Describe(in_fc).extent
+                    self.rasterMinusInit(in_raster, ras_max_min, ras_temp_path, in_fc, extent)  # Minus init operation
+                else:
+                    self.rasterMinusInit(in_raster, ras_max_min, ras_temp_path, in_fc=None, extent=None)  # Minus init operation
+            else:
+                self.rasterMinusInit(in_raster, ras_max_min, ras_temp_path, in_fc=None, extent=None)
 
-            # Initialize raster condition operation
-            self.rasterConditionInit(num_rows, "ras_min1_", "ras_min2_", "ras_max1_", "ras_max2_", ras_temp_path, "< ", "0")
+            self.rasterConditionInit(num_rows, "ras_min1_", "ras_min2_", "ras_max1_", "ras_max2_", ras_temp_path, "< ", "0")  # Initialize raster condition operation
 
             # Raster divide operation
             for ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine, row_count in self.getRowValue(in_raster, ras_max_min):
@@ -240,8 +242,7 @@ class GetSuitableLand(object):
                 self.rasterDivide(opt_from_val, minVal, "ras_min2_" + str(i), "ras_min3_" + str(i), ras_temp_path, min_ras=True)
                 self.rasterDivide(opt_to_val, maxVal, "ras_max2_" + str(i), "ras_max3_" + str(i), ras_temp_path, min_ras=False)
 
-            # Initialize raster condition operation
-            self.rasterConditionInit(num_rows, "ras_min3_", "ras_min4_", "ras_max3_", "ras_max4_", ras_temp_path, "> ", "1")
+            self.rasterConditionInit(num_rows, "ras_min3_", "ras_min4_", "ras_max3_", "ras_max4_", ras_temp_path, "> ", "1")  # Initialize raster condition operation
 
             # Calculate minimum rasters from the minimums and maximums calculation outputs
             for j in range(0, num_rows):
@@ -291,6 +292,32 @@ class GetSuitableLand(object):
             return
         except Exception as ex:
             arcpy.AddMessage('ERROR: {0}'.format(ex))
+
+    def rasterMinusInit(self, in_raster, ras_max_min, ras_temp_path, in_fc, extent):
+        """ Initializes raster minus operation
+            Args:
+                in_raster: Value table parameter with rows accompanied by columns.
+                ras_max_min: A parameter that determines whether minimum and maximum value should be calculated or not.
+                ras_temp_path: Temporary directory path.
+                in_fc: Zone feature class input.
+                extent: Zone feature class extent.
+            Return: None
+        """
+        i = 0
+        for ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine, row_count in self.getRowValue(in_raster, ras_max_min):
+            i += 1
+            if extent is not None:
+                # Raster clip operation
+                arcpy.AddMessage("Clipping {0}\n".format(ntpath.basename(ras_file)))
+                arcpy.Clip_management(ras_file, "{0} {1} {2} {3}".format(extent.XMin, extent.YMin, extent.XMax, extent.YMax), ras_temp_path + "ras_mask1_" + str(i), in_fc, "#", "ClippingGeometry")
+                # Masked raster minus operation
+                self.rasterMinus(ras_temp_path + "ras_mask1_" + str(i), minVal, "ras_min1_" + str(i), ras_temp_path, min_ras=True)
+                self.rasterMinus(ras_temp_path + "ras_mask1_" + str(i), maxVal, "ras_max1_" + str(i), ras_temp_path, min_ras=False)
+                arcpy.management.Delete(ras_temp_path + "ras_mask1_" + str(i))  # Delete temporary raster files
+            else:
+                # Raster minus operation
+                self.rasterMinus(ras_file, minVal, "ras_min1_" + str(i), ras_temp_path, min_ras=True)
+                self.rasterMinus(ras_file, maxVal, "ras_max1_" + str(i), ras_temp_path, min_ras=False)
 
     def rasterMinus(self, ras_file, val, ras_output, ras_temp_path, min_ras):
         """ Handles raster minus operation
