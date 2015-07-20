@@ -57,6 +57,9 @@ class GetSuitableLand(object):
         self.canRunInBackground = False
         self.parameters = [
             parameter("Input Rasters", "in_raster", "Value Table"),
+            parameter("Feature Zone Data", "in_fzone", "Feature Class", parameterType='Optional'),
+            parameter("Use feature zone data as mask", "p_mask", "Boolean", parameterType='Optional'),
+            parameter("Output Statistics Feature Class", "out_fstat", 'Feature Class', parameterType='Optional', direction='Output'),
             parameter("Output Raster", "out_raster", 'Raster Layer', direction='Output')
         ]
 
@@ -84,6 +87,7 @@ class GetSuitableLand(object):
                 parameters: Parameters from the tool.
             Returns: Parameter values.
         """
+
         if parameters[0].value:
             in_raster = parameters[0]  # Raster from the value table
             vtab = arcpy.ValueTable(len(in_raster.columns))  # Number of value table columns
@@ -91,6 +95,14 @@ class GetSuitableLand(object):
             # Get values from the generator function and update value table
             for ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine, row_count in self.getRowValue(in_raster, ras_max_min):
                 self.updateValueTable(in_raster, opt_from_val, opt_to_val, ras_combine, vtab, ras_file, minVal, maxVal)
+
+        # Enable and disable zonal statistics parameters
+        if parameters[1].value:
+            parameters[2].enabled = True
+            parameters[3].enabled = True
+        else:
+            parameters[2].enabled = False
+            parameters[3].enabled = False
         return
 
     def updateValueTable(self, in_raster, opt_from_val, opt_to_val, ras_combine, vtab, ras_file, minVal, maxVal):
@@ -205,7 +217,7 @@ class GetSuitableLand(object):
             ras_max_min = True
             in_raster = parameters[0]
             num_rows = len(parameters[0].values)  # The number of rows in the table
-            out_ras = parameters[1].valueAsText.replace("\\","/")  # Get output file path
+            out_ras = parameters[4].valueAsText.replace("\\","/")  # Get output file path
             ras_temp_path = ntpath.dirname(out_ras)  # Get path without file name
             ras_temp_path += "/Temp/"
 
@@ -269,7 +281,7 @@ class GetSuitableLand(object):
             out_ras_temp.save(out_ras)
             arcpy.AddMessage("Deleting temporary folder\n")
             shutil.rmtree(ras_temp_path)
-            arcpy.AddMessage("xxx Output saved!\n")
+            arcpy.AddMessage("Output saved!\n")
 
             # Load data to current map document data frame
             mxd = arcpy.mapping.MapDocument("CURRENT")
@@ -430,14 +442,14 @@ class GetSuitableLand(object):
                 Optimal From, Optimal To, raster file path, raster minimum value and maximum value
         """
         for i, lst in enumerate(in_raster.valueAsText.split(";")):
-            ras_file = lst.rsplit(' ', 5)[0]  # Get raster file path
-            paramInRaster = arcpy.Raster(ras_file.replace("'", ""))
-            opt_from_val = lst.split()[-3]  # Get crop optimum value from
-            opt_to_val = lst.split()[-2]  # Get crop optimum value to
             ras_combine = lst.split()[-1]  # Get combine option
             row_count = i
             if ras_max_min:
+                opt_from_val = lst.split()[-3]  # Get crop optimum value from
+                opt_to_val = lst.split()[-2]  # Get crop optimum value to
+                ras_file = lst.rsplit(' ', 5)[0]  # Get raster file path
                 if lst.split()[-5] == "#" or lst.split()[-4] == "#" or ras_combine == "#":
+                    paramInRaster = arcpy.Raster(ras_file.replace("'", ""))  # Replace quote on path with space
                     minVal = paramInRaster.minimum  # Minimum raster value
                     maxVal = paramInRaster.maximum  # Maximum raster value
                     ras_combine = "No"
@@ -445,6 +457,10 @@ class GetSuitableLand(object):
                 else:
                     minVal = lst.split()[-5]  # Minimum raster value
                     maxVal = lst.split()[-4]  # Maximum raster value
-                    yield ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine, row_count
+                    if row_count == 0:  # Set first row to "No"
+                        ras_combine = "No"
+                        yield ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine, row_count
+                    else:
+                        yield ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine, row_count
             else:
                 yield ras_combine
