@@ -281,12 +281,31 @@ class GetSuitableLand(object):
                     arcpy.AddMessage("Multiplying file {0} with input raster {1}\n".format(out_ras_temp, "rs_MxStat_" + str(j)))
                     out_ras_temp = out_ras_temp * arcpy.Raster(ras_temp_path + "rs_MxStat_" + str(j))
 
-            arcpy.AddMessage("Generating suitability output {0}\n".format(n_ras))
+            arcpy.AddMessage("Generating suitability output\n")
             out_ras_temp = out_ras_temp ** 1 / float(n_ras)  # Calculate geometric mean
-
             arcpy.AddMessage("Saving suitability output\n")
             out_ras_temp.save(out_ras)
             arcpy.AddMessage("Suitability output saved!\n")
+
+            # Perform zonal statistics and join field
+            if parameters[1].value:
+                in_fc = parameters[1].valueAsText.replace("\\","/")
+                if parameters[3].value:
+                    out_fc = parameters[3].valueAsText.replace("\\","/")
+                    arcpy.AddMessage("Generating zonal statistics for {0}\n".format(ntpath.basename(in_fc)))
+                    arcpy.gp.ZonalStatisticsAsTable_sa(in_fc, "FID", out_ras, ras_temp_path + "TableZonalSt.dbf", "DATA", "ALL")  # Zonal statistics table
+                    arcpy.AddMessage("Saving statistics output")
+                    arcpy.Copy_management(in_fc, out_fc, "ShapeFile")  # Copy feature class for joining
+                    arcpy.JoinField_management(out_fc, "FID", ras_temp_path + "TableZonalSt.dbf", "FID_", "")  # Join filed
+                    arcpy.AddMessage("Statistics output saved")
+                else:
+                    arcpy.AddMessage("Generating zonal statistics for {0}\n".format(ntpath.basename(in_fc)))
+                    arcpy.gp.ZonalStatisticsAsTable_sa(in_fc, "FID", out_ras, ras_temp_path + "TableZonalSt.dbf", "DATA", "ALL")
+                    arcpy.AddMessage("Saving statistics output")
+                    arcpy.Copy_management(in_fc, ntpath.dirname(out_ras) + "/" + "ZonalSt_" + ntpath.basename(in_fc), "ShapeFile")
+                    arcpy.JoinField_management(ntpath.dirname(out_ras) + "/" + "ZonalSt_" + ntpath.basename(in_fc), "FID", ras_temp_path + "TableZonalSt.dbf", "FID_", "")
+                    arcpy.AddMessage("Statistics output saved")
+
             arcpy.AddMessage("Deleting temporary folder\n")
             shutil.rmtree(ras_temp_path)
 
