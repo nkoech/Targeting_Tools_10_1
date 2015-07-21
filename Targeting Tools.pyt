@@ -255,6 +255,7 @@ class GetSuitableLand(object):
             ras_temp_file = self.setCombineFile(in_raster, ras_temp_path)  # Build a list with lists of temporary raster files
             out_ras_temp = 1  # Initial temporary raster value
             n = 0
+            n_ras = 0  # Number of rasters for geometric mean calculation
             # Overlay minimum rasters to create a suitability raster/map
             for item in ras_temp_file:
                 if len(item) > 1:
@@ -263,6 +264,7 @@ class GetSuitableLand(object):
                     arcpy.gp.CellStatistics_sa(item, ras_temp_path + "rs_MxStat_" + str(n), "MAXIMUM", "DATA")
                 else:
                     for f in item:
+                        n_ras += 1
                         arcpy.AddMessage("Multiplying file {0} with input raster\n".format(ntpath.basename(f)))
                         out_ras_temp = out_ras_temp * arcpy.Raster(f)
 
@@ -274,15 +276,19 @@ class GetSuitableLand(object):
             if n >= 1:
                 # Get times temp file and multiply with maximum value statistics output saved in a temporary directory
                 for j in range(0, n):
+                    n_ras += 1
                     j += 1
                     arcpy.AddMessage("Multiplying file {0} with input raster {1}\n".format(out_ras_temp, "rs_MxStat_" + str(j)))
                     out_ras_temp = out_ras_temp * arcpy.Raster(ras_temp_path + "rs_MxStat_" + str(j))
 
-            arcpy.AddMessage("Saving Output\n")
+            arcpy.AddMessage("Generating suitability output {0}\n".format(n_ras))
+            out_ras_temp = out_ras_temp ** 1 / float(n_ras)  # Calculate geometric mean
+
+            arcpy.AddMessage("Saving suitability output\n")
             out_ras_temp.save(out_ras)
+            arcpy.AddMessage("Suitability output saved!\n")
             arcpy.AddMessage("Deleting temporary folder\n")
             shutil.rmtree(ras_temp_path)
-            arcpy.AddMessage("Output saved!\n")
 
             # Load data to current map document data frame
             mxd = arcpy.mapping.MapDocument("CURRENT")
