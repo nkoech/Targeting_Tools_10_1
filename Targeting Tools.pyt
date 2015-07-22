@@ -287,31 +287,30 @@ class GetSuitableLand(object):
             out_ras_temp.save(out_ras)
             arcpy.AddMessage("Suitability output saved!\n")
 
-            # Perform zonal statistics and join field
-            if parameters[1].value:
-                in_fc = parameters[1].valueAsText.replace("\\","/")
-                if parameters[3].value:
-                    out_fc = parameters[3].valueAsText.replace("\\","/")
-                    arcpy.AddMessage("Generating zonal statistics for {0}\n".format(ntpath.basename(in_fc)))
-                    arcpy.gp.ZonalStatisticsAsTable_sa(in_fc, "FID", out_ras, ras_temp_path + "TableZonalSt.dbf", "DATA", "ALL")  # Zonal statistics table
-                    arcpy.AddMessage("Saving statistics output")
-                    arcpy.Copy_management(in_fc, out_fc, "ShapeFile")  # Copy feature class for joining
-                    arcpy.JoinField_management(out_fc, "FID", ras_temp_path + "TableZonalSt.dbf", "FID_", "")  # Join filed
-                    arcpy.AddMessage("Statistics output saved")
-                else:
-                    arcpy.AddMessage("Generating zonal statistics for {0}\n".format(ntpath.basename(in_fc)))
-                    arcpy.gp.ZonalStatisticsAsTable_sa(in_fc, "FID", out_ras, ras_temp_path + "TableZonalSt.dbf", "DATA", "ALL")
-                    arcpy.AddMessage("Saving statistics output")
-                    arcpy.Copy_management(in_fc, ntpath.dirname(out_ras) + "/" + "ZonalSt_" + ntpath.basename(in_fc), "ShapeFile")
-                    arcpy.JoinField_management(ntpath.dirname(out_ras) + "/" + "ZonalSt_" + ntpath.basename(in_fc), "FID", ras_temp_path + "TableZonalSt.dbf", "FID_", "")
-                    arcpy.AddMessage("Statistics output saved")
+            self.rasterZonalStatisticsInit(parameters, out_ras, ras_temp_path)  # Perform zonal statistics
 
             arcpy.AddMessage("Deleting temporary folder\n")
             shutil.rmtree(ras_temp_path)
 
-            # Load data to current map document data frame
+            # Load outputs to current map document data frame
             mxd = arcpy.mapping.MapDocument("CURRENT")
             df = arcpy.mapping.ListDataFrames(mxd, "*")[0]
+            # Load feature class output
+            if parameters[1].value:
+                in_fc = parameters[1].valueAsText.replace("\\","/")
+                in_fc_file = ntpath.basename(in_fc)
+                if parameters[3].value:
+                    out_fc = parameters[3].valueAsText.replace("\\","/")
+                    if out_fc[-4:] != ".shp":
+                        out_fc = out_fc + ".shp"
+                    lyr = arcpy.mapping.Layer(out_fc)
+                else:
+                    out_fc = ntpath.dirname(out_ras) + "/" + "ZonalSt_" + in_fc_file
+                    if out_fc[-4:] != ".shp":
+                        out_fc = out_fc + ".shp"
+                    lyr = arcpy.mapping.Layer(out_fc)
+                arcpy.mapping.AddLayer(df, lyr, "AUTO_ARRANGE")
+            # Load raster output
             lyr = arcpy.mapping.Layer(out_ras)
             arcpy.mapping.AddLayer(df, lyr, "AUTO_ARRANGE")
             return
@@ -439,6 +438,41 @@ class GetSuitableLand(object):
                 j += 1
                 ras_file_lists[i][k] = ras_temp_path + "ras_MnMx_" + str(j)  # Update lists with temporary files
         return ras_file_lists
+
+    def rasterZonalStatisticsInit(self, parameters, out_ras, ras_temp_path):
+        """ Initializes zonal statistics operation
+            Args:
+                parameters: Tool parameters object
+                out_ras: Zonal statistics input raster
+                ras_temp_path: Temporary directory path
+            Return: None
+        """
+        if parameters[1].value:
+            in_fc = parameters[1].valueAsText.replace("\\","/")
+            in_fc_file = ntpath.basename(in_fc)
+            if parameters[3].value:
+                out_fc = parameters[3].valueAsText.replace("\\","/")
+                self.rasterZonalStatistics(in_fc_file, in_fc, out_ras, ras_temp_path, out_fc)  # Zonal statistics operation
+            else:
+                out_fc = ntpath.dirname(out_ras) + "/" + "ZonalSt_" + in_fc_file
+                self.rasterZonalStatistics(in_fc_file, in_fc, out_ras, ras_temp_path, out_fc)
+
+    def rasterZonalStatistics(self, in_fc_file, in_fc, out_ras, ras_temp_path, out_fc):
+        """ Handles zonal statistics operation
+            Args:
+                in_fc_file: Input feature class file
+                in_fc: Input feature class parameter
+                out_ras: Zonal statistics input raster
+                ras_temp_path: Temporary directory path
+                out_fc: Output feature class parameter
+            Return: None
+        """
+        arcpy.AddMessage("Generating zonal statistics for {0}\n".format(in_fc_file))
+        arcpy.gp.ZonalStatisticsAsTable_sa(in_fc, "FID", out_ras, ras_temp_path + "TableZonalSt.dbf", "DATA", "ALL")  # Zonal statistics table
+        arcpy.AddMessage("Saving statistics output")
+        arcpy.Copy_management(in_fc, out_fc, "ShapeFile")
+        arcpy.JoinField_management(out_fc, "FID", ras_temp_path + "TableZonalSt.dbf", "FID_", "")  # Join filed
+        arcpy.AddMessage("Statistics output saved")
 
     def splitCombineValue(self, in_raster):
         """ Splits lists of combine column value "no" into individual lists.
