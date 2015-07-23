@@ -89,13 +89,13 @@ class GetSuitableLand(object):
         """
 
         if parameters[0].value:
-            in_raster = parameters[0]  # Raster from the value table
-            vtab = arcpy.ValueTable(len(in_raster.columns))  # Number of value table columns
-            ras_max_min = True
-            # Get values from the generator function and update value table
-            for ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine, row_count in self.getRowValue(in_raster, ras_max_min):
-                self.updateValueTable(in_raster, opt_from_val, opt_to_val, ras_combine, vtab, ras_file, minVal, maxVal)
-
+            if parameters[0].altered:
+                in_raster = parameters[0]  # Raster from the value table
+                vtab = arcpy.ValueTable(len(in_raster.columns))  # Number of value table columns
+                ras_max_min = True
+                # Get values from the generator function and update value table
+                for ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine, row_count in self.getRowValue(in_raster, ras_max_min):
+                    self.updateValueTable(in_raster, opt_from_val, opt_to_val, ras_combine, vtab, ras_file, minVal, maxVal)
         # Enable and disable zonal statistics parameters
         if parameters[1].value:
             parameters[2].enabled = True
@@ -154,55 +154,56 @@ class GetSuitableLand(object):
             Returns: Internal validation messages.
         """
         if parameters[0].value:
-            in_raster = parameters[0]
-            num_rows = len(in_raster.values)  # The number of rows in the table
-            ras_max_min = True
-            ras_ref = []
-            i = 0
-            # Get values from the generator function to show update messages
-            for ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine, row_count in self.getRowValue(in_raster, ras_max_min):
-                i += 1
-                if opt_from_val == "#":
-                    in_raster.setErrorMessage("Crop \"Optimal From\" value is missing")
-                elif opt_to_val == "#":
-                    in_raster.setErrorMessage("Crop \"Optimal To\" value is missing")
-                elif ras_combine == "#":
-                    in_raster.setErrorMessage("Layer \"Combine\" value is missing")
-                elif opt_to_val == "#" and opt_from_val == "#" and ras_combine == "#":
-                    in_raster.setErrorMessage("Crop \"Optimal From\", \"Optimal To\" and layer \"Combine\" values are missing")
-                elif float(opt_from_val) < float(minVal):
-                    in_raster.setWarningMessage("Crop optimal value {0} is less than the minimum value {1}".format(opt_from_val, minVal))
-                elif float(opt_from_val) > float(maxVal):
-                    in_raster.setErrorMessage("Crop optimal value {0} is greater than the maximum value {1}".format(opt_from_val, maxVal))
-                elif float(opt_from_val) > float(opt_to_val):
-                    in_raster.setErrorMessage("Crop optimal value \"from\" is greater than crop optimal value \"to\"")
-                elif float(opt_to_val) < float(minVal):
-                    in_raster.setErrorMessage("Crop optimal value {0} is less than the minimum value {1}".format(opt_to_val, minVal))
-                elif float(opt_to_val) > float(maxVal):
-                    in_raster.setWarningMessage("Crop optimal value {0} is greater than the maximum value {1}".format(opt_to_val, maxVal))
-                elif ras_combine.lower() != "yes":
-                    if ras_combine.lower() != "no":
-                        in_raster.setErrorMessage("Layer \"Combine\" field expects \"Yes\" or \"No\" input value")
-                elif row_count == 0 and ras_combine.lower() != "no":
-                    in_raster.setErrorMessage("The first \"Combine\" value should ONLY be \"No\"")
-                elif num_rows == 1:
-                    in_raster.setWarningMessage("One raster in place. Two are recommended")
-                else:
-                    pass
-                # Get spatial reference system errors
-                if i == num_rows:
-                    last_spataial_ref = arcpy.Describe(ras_file).SpatialReference   # Get spatial reference
-                    for ref in ras_ref:
-                        if last_spataial_ref.Type != ref.Type:  # Check difference in spatial reference type
-                            in_raster.setWarningMessage("All raster data must be in the same spatial reference")
-                        elif last_spataial_ref.Type != "Geographic":
-                            if last_spataial_ref.PCSCode != ref.PCSCode:  # Check projection code
-                                in_raster.setWarningMessage("All raster data must be in the same projection system")
-                        else:
-                            pass
-                else:
-                    spatial_ref = arcpy.Describe(ras_file).SpatialReference  # Get spatial reference of rasters in value table
-                    ras_ref.append(spatial_ref)
+            if parameters[0].altered:
+                in_raster = parameters[0]
+                num_rows = len(in_raster.values)  # The number of rows in the table
+                ras_max_min = True
+                ras_ref = []
+                i = 0
+                # Get values from the generator function to show update messages
+                for ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine, row_count in self.getRowValue(in_raster, ras_max_min):
+                    i += 1
+                    if opt_from_val == "#":
+                        in_raster.setErrorMessage("Crop \"Optimal From\" value is missing")
+                    elif opt_to_val == "#":
+                        in_raster.setErrorMessage("Crop \"Optimal To\" value is missing")
+                    elif ras_combine == "#":
+                        in_raster.setErrorMessage("Layer \"Combine\" value is missing")
+                    elif opt_to_val == "#" and opt_from_val == "#" and ras_combine == "#":
+                        in_raster.setErrorMessage("Crop \"Optimal From\", \"Optimal To\" and layer \"Combine\" values are missing")
+                    elif float(opt_from_val) < float(minVal):
+                        in_raster.setWarningMessage("Crop optimal value {0} is less than the minimum value {1}".format(opt_from_val, minVal))
+                    elif float(opt_from_val) > float(maxVal):
+                        in_raster.setErrorMessage("Crop optimal value {0} is greater than the maximum value {1}".format(opt_from_val, maxVal))
+                    elif float(opt_from_val) > float(opt_to_val):
+                        in_raster.setErrorMessage("Crop optimal value \"from\" is greater than crop optimal value \"to\"")
+                    elif float(opt_to_val) < float(minVal):
+                        in_raster.setErrorMessage("Crop optimal value {0} is less than the minimum value {1}".format(opt_to_val, minVal))
+                    elif float(opt_to_val) > float(maxVal):
+                        in_raster.setWarningMessage("Crop optimal value {0} is greater than the maximum value {1}".format(opt_to_val, maxVal))
+                    elif ras_combine.lower() != "yes":
+                        if ras_combine.lower() != "no":
+                            in_raster.setErrorMessage("Layer \"Combine\" field expects \"Yes\" or \"No\" input value")
+                    elif row_count == 0 and ras_combine.lower() != "no":
+                        in_raster.setErrorMessage("The first \"Combine\" value should ONLY be \"No\"")
+                    elif num_rows == 1:
+                        in_raster.setWarningMessage("One raster in place. Two are recommended")
+                    else:
+                        pass
+                    # Get spatial reference system errors
+                    if i == num_rows:
+                        last_spataial_ref = arcpy.Describe(ras_file).SpatialReference   # Get spatial reference
+                        for ref in ras_ref:
+                            if last_spataial_ref.Type != ref.Type:  # Check difference in spatial reference type
+                                in_raster.setWarningMessage("All raster data must be in the same spatial reference")
+                            elif last_spataial_ref.Type != "Geographic":
+                                if last_spataial_ref.PCSCode != ref.PCSCode:  # Check projection code
+                                    in_raster.setWarningMessage("All raster data must be in the same projection system")
+                            else:
+                                pass
+                    else:
+                        spatial_ref = arcpy.Describe(ras_file).SpatialReference  # Get spatial reference of rasters in value table
+                        ras_ref.append(spatial_ref)
         return
 
     def execute(self, parameters, messages):
@@ -511,7 +512,7 @@ class GetSuitableLand(object):
                 opt_to_val = lst.split()[-2]  # Get crop optimum value to
                 ras_file = lst.rsplit(' ', 5)[0]  # Get raster file path
                 if lst.split()[-5] == "#" or lst.split()[-4] == "#" or ras_combine == "#":
-                    paramInRaster = arcpy.Raster(ras_file.replace("'", ""))  # Replace quote on path with space
+                    paramInRaster = arcpy.Raster(ras_file.replace("'", ""))  # Replace quote on path with null
                     minVal = paramInRaster.minimum  # Minimum raster value
                     maxVal = paramInRaster.maximum  # Maximum raster value
                     ras_combine = "No"
