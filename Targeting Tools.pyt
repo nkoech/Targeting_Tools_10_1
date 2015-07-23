@@ -225,7 +225,7 @@ class GetSuitableLand(object):
                 os.makedirs(ras_temp_path)  # Create new directory
 
             if parameters[1].value:
-                in_fc = parameters[1].valueAsText.replace("\\","/")  # Get input feature class path
+                in_fc = self.getInputFc(parameters)["in_fc"]
                 if parameters[2].value == True:  # Check if mask is true
                     extent = arcpy.Describe(in_fc).extent
                     self.rasterMinusInit(in_raster, ras_max_min, ras_temp_path, in_fc, extent)  # Minus init operation
@@ -233,7 +233,6 @@ class GetSuitableLand(object):
                     self.rasterMinusInit(in_raster, ras_max_min, ras_temp_path, in_fc=None, extent=None)  # Minus init operation
             else:
                 self.rasterMinusInit(in_raster, ras_max_min, ras_temp_path, in_fc=None, extent=None)
-
             self.rasterConditionInit(num_rows, "ras_min1_", "ras_min2_", "ras_max1_", "ras_max2_", ras_temp_path, "< ", "0")  # Initialize raster condition operation
 
             # Raster divide operation
@@ -286,33 +285,10 @@ class GetSuitableLand(object):
             arcpy.AddMessage("Saving suitability output\n")
             out_ras_temp.save(out_ras)
             arcpy.AddMessage("Suitability output saved!\n")
-
             self.rasterZonalStatisticsInit(parameters, out_ras, ras_temp_path)  # Perform zonal statistics
-
             arcpy.AddMessage("Deleting temporary folder\n")
             shutil.rmtree(ras_temp_path)
-
-            # Load outputs to current map document data frame
-            mxd = arcpy.mapping.MapDocument("CURRENT")
-            df = arcpy.mapping.ListDataFrames(mxd, "*")[0]
-            # Load feature class output
-            if parameters[1].value:
-                in_fc = parameters[1].valueAsText.replace("\\","/")
-                in_fc_file = ntpath.basename(in_fc)
-                if parameters[3].value:
-                    out_fc = parameters[3].valueAsText.replace("\\","/")
-                    if out_fc[-4:] != ".shp":
-                        out_fc = out_fc + ".shp"
-                    lyr = arcpy.mapping.Layer(out_fc)
-                else:
-                    out_fc = ntpath.dirname(out_ras) + "/" + "ZonalSt_" + in_fc_file
-                    if out_fc[-4:] != ".shp":
-                        out_fc = out_fc + ".shp"
-                    lyr = arcpy.mapping.Layer(out_fc)
-                arcpy.mapping.AddLayer(df, lyr, "AUTO_ARRANGE")
-            # Load raster output
-            lyr = arcpy.mapping.Layer(out_ras)
-            arcpy.mapping.AddLayer(df, lyr, "AUTO_ARRANGE")
+            self.loadOutput(parameters, out_ras)  # Load output to current MXD
             return
         except Exception as ex:
             arcpy.AddMessage('ERROR: {0}'.format(ex))
@@ -448,8 +424,8 @@ class GetSuitableLand(object):
             Return: None
         """
         if parameters[1].value:
-            in_fc = parameters[1].valueAsText.replace("\\","/")
-            in_fc_file = ntpath.basename(in_fc)
+            in_fc = self.getInputFc(parameters)["in_fc"]
+            in_fc_file = self.getInputFc(parameters)["in_fc_file"]
             if parameters[3].value:
                 out_fc = parameters[3].valueAsText.replace("\\","/")
                 self.rasterZonalStatistics(in_fc_file, in_fc, out_ras, ras_temp_path, out_fc)  # Zonal statistics operation
@@ -550,3 +526,48 @@ class GetSuitableLand(object):
                         yield ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine, row_count
             else:
                 yield ras_combine
+
+    def loadOutput(self, parameters, out_ras):
+        """ Loads output to the current MXD
+            Args:
+                parameters: Tool parameters object
+                out_ras: Zonal statistics input raster
+            Return: None
+        """
+        mxd = arcpy.mapping.MapDocument("CURRENT")
+        df = arcpy.mapping.ListDataFrames(mxd, "*")[0]  # Get the first data frame
+        if parameters[1].value:
+            if parameters[3].value:
+                out_fc = parameters[3].valueAsText.replace("\\", "/")
+                lyr = self.createFcLayer(out_fc)  # Create feature class layer
+            else:
+                out_fc = ntpath.dirname(out_ras) + "/" + "ZonalSt_" + self.getInputFc(parameters)["in_fc_file"]
+                lyr = self.createFcLayer(out_fc)
+            arcpy.mapping.AddLayer(df, lyr, "AUTO_ARRANGE")
+        # Load raster output
+        lyr = arcpy.mapping.Layer(out_ras)
+        arcpy.mapping.AddLayer(df, lyr, "AUTO_ARRANGE")
+
+    def getInputFc(self, parameters):
+        """ Gets the input MXD
+            Args:
+                parameters: Tool parameters object
+            Return:
+                in_fc_file: Input feature class file
+                in_fc: Input feature class parameter
+        """
+        in_fc = parameters[1].valueAsText.replace("\\","/")
+        in_fc_file = ntpath.basename(in_fc)
+        return {"in_fc": in_fc, "in_fc_file": in_fc_file}
+
+    def createFcLayer(self, out_fc):
+        """ Handles creation of feature class layer
+            Args:
+                parameters: Tool parameters object
+                out_fc: Output feature class parameter
+            Return:
+                lyr: Feature class layer
+        """
+        if out_fc[-4:] != ".shp":
+            out_fc = out_fc + ".shp"
+        return arcpy.mapping.Layer(out_fc)
