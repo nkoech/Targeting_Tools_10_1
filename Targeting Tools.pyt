@@ -194,13 +194,8 @@ class GetSuitableLand(object):
                     if i == num_rows:
                         last_spataial_ref = arcpy.Describe(ras_file).SpatialReference   # Get spatial reference
                         for ref in ras_ref:
-                            if last_spataial_ref.Type != ref.Type:  # Check difference in spatial reference type
-                                in_raster.setWarningMessage("Raster data are not in the  spatial reference")
-                            elif last_spataial_ref.Type != "Geographic":
-                                if last_spataial_ref.PCSCode != ref.PCSCode:  # Check projection code
-                                    in_raster.setWarningMessage("Raster data are not in the  spatial reference")
-                            else:
-                                pass
+                            warning_msg = "Raster data not in the  spatial reference"
+                            self.setSpatialError(last_spataial_ref, ref, in_raster, warning_msg)
                     else:
                         spatial_ref = arcpy.Describe(ras_file).SpatialReference  # Get spatial reference of rasters in value table
                         ras_ref.append(spatial_ref)
@@ -208,15 +203,10 @@ class GetSuitableLand(object):
             if parameters[1].value:
                 if parameters[1].altered:
                     in_fc_param = parameters[1]
-                    in_fc = parameters[1].value
+                    in_fc = parameters[1].valueAsText.replace("\\","/")
                     in_fc_spataial_ref = arcpy.Describe(in_fc).SpatialReference
-                    if in_fc_spataial_ref.Type != ras_ref[-1].Type:  # Check difference in spatial reference type
-                        in_fc_param.setWarningMessage("Feature zone data spatial reference does not match with input raster")
-                    elif in_fc_spataial_ref.Type != "Geographic":
-                        if in_fc_spataial_ref.PCSCode != ras_ref[-1].PCSCode:  # Check projection code
-                            in_fc_param.setWarningMessage("Feature zone data spatial reference does not match with input raster")
-                    else:
-                        pass
+                    warning_msg = "Feature zone data spatial reference does not match with input raster"
+                    self.setSpatialError(in_fc_spataial_ref, ras_ref[-1], in_fc_param, warning_msg)
         return
 
     def execute(self, parameters, messages):
@@ -524,6 +514,7 @@ class GetSuitableLand(object):
                 opt_from_val = lst.split()[-3]  # Get crop optimum value from
                 opt_to_val = lst.split()[-2]  # Get crop optimum value to
                 ras_file = lst.rsplit(' ', 5)[0]  # Get raster file path
+                ras_file = ras_file.replace("\\","/")
                 if lst.split()[-5] == "#" or lst.split()[-4] == "#" or ras_combine == "#":
                     paramInRaster = arcpy.Raster(ras_file.replace("'", ""))  # Replace quote on path with null
                     minVal = paramInRaster.minimum  # Minimum raster value
@@ -585,3 +576,20 @@ class GetSuitableLand(object):
         if out_fc[-4:] != ".shp":
             out_fc = out_fc + ".shp"
         return arcpy.mapping.Layer(out_fc)
+
+    def setSpatialError(self, in_spataial_ref, ref, in_data, warning_msg):
+        """ Sets spatial error message
+            Args:
+                in_spataial_ref: Input data spatial reference
+                ref: Input raster spatial reference
+                in_data: Input data - raster and feature class
+                warnign_msg: Spatial reference warning message
+            Return: None
+        """
+        if in_spataial_ref.Type != ref.Type:  # Check difference in spatial reference type
+            in_data.setWarningMessage(warning_msg)
+        elif in_spataial_ref.Type != "Geographic":
+            if in_spataial_ref.PCSCode != ref.PCSCode:  # Check projection code
+                in_data.setWarningMessage(warning_msg)
+        else:
+            pass
