@@ -1,18 +1,15 @@
 Targeting Tools
 ===============
 
-Targeting toolbox is an ArcGIS toolbox (.pyt) purely developed using Python programming language. The toolbox has three tools that were developed with an aim of identifying land that is suitable for a certain crop to grow based on user criteria. The three tools are:
+Targeting toolbox is an ArcGIS toolbox (.pyt) purely developed using Python programming language. The toolbox has two tools that were developed with an aim of identifying land that is suitable for a certain crop to grow based on user criteria. The two tools are:
 
 * **Land Suitability:** This tool can be used to identify areas that ,are suitable for planting a certain type of crop as per the user criteria. Please click on the **Help Tool button** once you install the toolbox in an ArcGIS environment to get information on how to use it.
 
 * **Land Match:** A tool that can be used to find suitable sites that are similar to already existing farmlands under a certain type of crop. This tool is still **under development** and will be shared soon.
 
-* **Target Statistics:** This tool is expeceted to calculate statistics on values of the output rasters from the two tools mentioned above. **To be realeased soon**.
-
-
 ## Tool Specifications
 
-1. The tools work with ArcGIS version 10.1 and above. 
+1. The tools work with ArcGIS version 10.1 and above.
 
 2. At a minimum, the tools require the Spatial Analyst Extension to run.
 
@@ -21,7 +18,7 @@ Targeting toolbox is an ArcGIS toolbox (.pyt) purely developed using Python prog
 1. Download the [Targeting Tools 0.2](https://github.com/nkoech/Targeting_Tools_10_1/releases/download/V0.2/Targeting_Tools_0.2.zip) toolbox
 
 2. Move the zip file to the directory where you want to store the toolbox.
- 
+
 3. Extract the contents of the zip file.
 
 4. Open ArcMap 10.1 or any version above it, and click Geoprocessing > ArcToolbox.
