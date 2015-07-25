@@ -228,6 +228,7 @@ class GetSuitableLand(object):
             if not os.path.exists(ras_temp_path):
                 os.makedirs(ras_temp_path)  # Create new directory
 
+            # Raster minus operation
             if parameters[1].value:
                 in_fc = self.getInputFc(parameters)["in_fc"]
                 if parameters[2].value == True:  # Check if mask is true
@@ -237,6 +238,7 @@ class GetSuitableLand(object):
                     self.rasterMinusInit(in_raster, ras_max_min, ras_temp_path, in_fc=None, extent=None)  # Minus init operation
             else:
                 self.rasterMinusInit(in_raster, ras_max_min, ras_temp_path, in_fc=None, extent=None)
+
             self.rasterConditionInit(num_rows, "ras_min1_", "ras_min2_", "ras_max1_", "ras_max2_", ras_temp_path, "< ", "0")  # Initialize raster condition operation
 
             # Raster divide operation
