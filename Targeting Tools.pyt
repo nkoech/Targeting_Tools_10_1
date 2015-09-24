@@ -14,7 +14,7 @@
                 Requires Spatial Analyst extension
 
     Created:    May 2015
-    Modified:   June 2015
+    Modified:   September 2015
 """
 
 import os
@@ -57,9 +57,7 @@ class GetSuitableLand(object):
         self.canRunInBackground = False
         self.parameters = [
             parameter("Input Rasters", "in_raster", "Value Table"),
-            parameter("Feature Zone Data", "in_fczone", "Feature Class", parameterType='Optional'),
-            parameter("Use feature zone data as mask", "p_mask", "Boolean", parameterType='Optional'),
-            parameter("Output Statistics Feature Class", "out_fstat", 'Feature Class', parameterType='Optional', direction='Output'),
+            parameter("Output Extent", "in_fczone", "Feature Class", parameterType='Optional'),
             parameter("Output Raster", "out_raster", 'Raster Layer', direction='Output')
         ]
 
@@ -96,13 +94,6 @@ class GetSuitableLand(object):
                 # Get values from the generator function and update value table
                 for ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine, row_count in self.getRowValue(in_raster, ras_max_min):
                     self.updateValueTable(in_raster, opt_from_val, opt_to_val, ras_combine, vtab, ras_file, minVal, maxVal)
-        # Enable and disable zonal statistics parameters
-        if parameters[1].value:
-            parameters[2].enabled = True
-            parameters[3].enabled = True
-        else:
-            parameters[2].enabled = False
-            parameters[3].enabled = False
         return
 
     def updateValueTable(self, in_raster, opt_from_val, opt_to_val, ras_combine, vtab, ras_file, minVal, maxVal):
@@ -163,6 +154,16 @@ class GetSuitableLand(object):
                 # Get values from the generator function to show update messages
                 for ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine, row_count in self.getRowValue(in_raster, ras_max_min):
                     i += 1
+                    # Set raster spatial reference errors
+                    if i == num_rows:
+                        last_spataial_ref = arcpy.Describe(ras_file).SpatialReference   # Get spatial reference
+                        for ref in ras_ref:
+                            warning_msg = "Raster data not in the  spatial reference"
+                            self.setSpatialError(last_spataial_ref, ref, in_raster, warning_msg)
+                    else:
+                        spatial_ref = arcpy.Describe(ras_file).SpatialReference  # Get spatial reference of rasters in value table
+                        ras_ref.append(spatial_ref)
+                    # Set errors for other value table variables
                     if opt_from_val == "#":
                         in_raster.setErrorMessage("Crop \"Optimal From\" value is missing")
                     elif opt_to_val == "#":
@@ -190,23 +191,22 @@ class GetSuitableLand(object):
                         in_raster.setWarningMessage("One raster in place. Two are recommended")
                     else:
                         pass
-                    # Set raster spatial reference errors
-                    if i == num_rows:
-                        last_spataial_ref = arcpy.Describe(ras_file).SpatialReference   # Get spatial reference
-                        for ref in ras_ref:
-                            warning_msg = "Raster data not in the  spatial reference"
-                            self.setSpatialError(last_spataial_ref, ref, in_raster, warning_msg)
-                    else:
-                        spatial_ref = arcpy.Describe(ras_file).SpatialReference  # Get spatial reference of rasters in value table
-                        ras_ref.append(spatial_ref)
             # Set feature class spatial reference errors
             if parameters[1].value:
                 if parameters[1].altered:
                     in_fc_param = parameters[1]
                     in_fc = parameters[1].valueAsText.replace("\\","/")
                     in_fc_spataial_ref = arcpy.Describe(in_fc).SpatialReference
-                    warning_msg = "Feature zone data spatial reference does not match with input raster"
+                    warning_msg = "Output extent data spatial reference does not match with input raster"
                     self.setSpatialError(in_fc_spataial_ref, ras_ref[-1], in_fc_param, warning_msg)
+            # Set ESRI grid output file size error
+            if parameters[2].value:
+                if parameters[2].altered:
+                    out_ras = parameters[2].valueAsText.replace("\\", "/")
+                    out_ras_file, out_ras_file_ext = os.path.splitext(out_ras)
+                    if out_ras_file_ext != ".tif":
+                        if len(ntpath.basename(out_ras)) > 13:
+                            in_raster.setErrorMessage("Output raster: The length of the grid base name in {0} is longer than 13.".format(out_ras.replace("/", "\\")))
         return
 
     def execute(self, parameters, messages):
@@ -221,7 +221,7 @@ class GetSuitableLand(object):
             ras_max_min = True
             in_raster = parameters[0]
             num_rows = len(parameters[0].values)  # The number of rows in the table
-            out_ras = parameters[4].valueAsText.replace("\\","/")  # Get output file path
+            out_ras = parameters[2].valueAsText.replace("\\","/")  # Get output file path
             ras_temp_path = ntpath.dirname(out_ras)  # Get path without file name
             ras_temp_path += "/Temp/"
 
@@ -231,11 +231,8 @@ class GetSuitableLand(object):
             # Raster minus operation
             if parameters[1].value:
                 in_fc = self.getInputFc(parameters)["in_fc"]
-                if parameters[2].value == True:  # Check if mask is true
-                    extent = arcpy.Describe(in_fc).extent
-                    self.rasterMinusInit(in_raster, ras_max_min, ras_temp_path, in_fc, extent)  # Minus init operation
-                else:
-                    self.rasterMinusInit(in_raster, ras_max_min, ras_temp_path, in_fc=None, extent=None)  # Minus init operation
+                extent = arcpy.Describe(in_fc).extent # Get feature class extent
+                self.rasterMinusInit(in_raster, ras_max_min, ras_temp_path, in_fc, extent)  # Minus init operation
             else:
                 self.rasterMinusInit(in_raster, ras_max_min, ras_temp_path, in_fc=None, extent=None)
 
@@ -291,7 +288,6 @@ class GetSuitableLand(object):
             arcpy.AddMessage("Saving suitability output\n")
             out_ras_temp.save(out_ras)
             arcpy.AddMessage("Suitability output saved!\n")
-            self.rasterZonalStatisticsInit(parameters, out_ras, ras_temp_path)  # Perform zonal statistics
             arcpy.AddMessage("Deleting temporary folder\n")
             shutil.rmtree(ras_temp_path)
             self.loadOutput(parameters, out_ras)  # Load output to current MXD
@@ -421,41 +417,6 @@ class GetSuitableLand(object):
                 ras_file_lists[i][k] = ras_temp_path + "ras_MnMx_" + str(j)  # Update lists with temporary files
         return ras_file_lists
 
-    def rasterZonalStatisticsInit(self, parameters, out_ras, ras_temp_path):
-        """ Initializes zonal statistics operation
-            Args:
-                parameters: Tool parameters object
-                out_ras: Zonal statistics input raster
-                ras_temp_path: Temporary directory path
-            Return: None
-        """
-        if parameters[1].value:
-            in_fc = self.getInputFc(parameters)["in_fc"]
-            in_fc_file = self.getInputFc(parameters)["in_fc_file"]
-            if parameters[3].value:
-                out_fc = parameters[3].valueAsText.replace("\\","/")
-                self.rasterZonalStatistics(in_fc_file, in_fc, out_ras, ras_temp_path, out_fc)  # Zonal statistics operation
-            else:
-                out_fc = ntpath.dirname(out_ras) + "/" + "ZonalSt_" + in_fc_file
-                self.rasterZonalStatistics(in_fc_file, in_fc, out_ras, ras_temp_path, out_fc)
-
-    def rasterZonalStatistics(self, in_fc_file, in_fc, out_ras, ras_temp_path, out_fc):
-        """ Handles zonal statistics operation
-            Args:
-                in_fc_file: Input feature class file
-                in_fc: Input feature class parameter
-                out_ras: Zonal statistics input raster
-                ras_temp_path: Temporary directory path
-                out_fc: Output feature class parameter
-            Return: None
-        """
-        arcpy.AddMessage("Generating zonal statistics for {0}\n".format(in_fc_file))
-        arcpy.gp.ZonalStatisticsAsTable_sa(in_fc, "FID", out_ras, ras_temp_path + "TableZonalSt.dbf", "DATA", "ALL")  # Zonal statistics table
-        arcpy.AddMessage("Saving statistics output")
-        arcpy.Copy_management(in_fc, out_fc, "ShapeFile")
-        arcpy.JoinField_management(out_fc, "FID", ras_temp_path + "TableZonalSt.dbf", "FID_", "")  # Join filed
-        arcpy.AddMessage("Statistics output saved")
-
     def splitCombineValue(self, in_raster):
         """ Splits lists of combine column value "no" into individual lists.
             Args:
@@ -538,19 +499,11 @@ class GetSuitableLand(object):
         """ Loads output to the current MXD
             Args:
                 parameters: Tool parameters object
-                out_ras: Zonal statistics input raster
+                out_ras: Land suitability layer
             Return: None
         """
         mxd = arcpy.mapping.MapDocument("CURRENT")
         df = arcpy.mapping.ListDataFrames(mxd, "*")[0]  # Get the first data frame
-        if parameters[1].value:
-            if parameters[3].value:
-                out_fc = parameters[3].valueAsText.replace("\\", "/")
-                lyr = self.createFcLayer(out_fc)  # Create feature class layer
-            else:
-                out_fc = ntpath.dirname(out_ras) + "/" + "ZonalSt_" + self.getInputFc(parameters)["in_fc_file"]
-                lyr = self.createFcLayer(out_fc)
-            arcpy.mapping.AddLayer(df, lyr, "AUTO_ARRANGE")
         # Load raster output
         lyr = arcpy.mapping.Layer(out_ras)
         arcpy.mapping.AddLayer(df, lyr, "AUTO_ARRANGE")
