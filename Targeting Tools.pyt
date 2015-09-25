@@ -45,7 +45,7 @@ class Toolbox(object):
         self.alias = "Target Tools"
         self.canRunInBackground = False
         # List of tool classes associated with this toolbox
-        self.tools = [SuitableLandGenerator, StatisticsCalculator]
+        self.tools = [LandSuitability, LandStatistics]
 
 
 class TargetingTool(object):
@@ -61,7 +61,7 @@ class TargetingTool(object):
         return spatialAnalystCheckedOut
 
 
-class SuitableLandGenerator(TargetingTool):
+class LandSuitability(TargetingTool):
     def __init__(self):
         """Define the tool (tool name is the name of the class)."""
         self.label = "Land Suitability"
@@ -551,14 +551,14 @@ class SuitableLandGenerator(TargetingTool):
             pass
 
 
-class StatisticsCalculator(TargetingTool):
+class LandStatistics(TargetingTool):
     def __init__(self):
         """Define the tool (tool name is the name of the class)."""
         self.label = "Land Statistics"
         self.description = ""
         self.canRunInBackground = False
         self.parameters = [
-            parameter("Input feature zone data", "in_fczone", "Feature Class"),
+            parameter("Input feature zone data", "in_fczone", "Feature Class", parameterType='Optional'),
             parameter("Input raster zone data", "in_raszone", "Raster Layer")
         ]
 
