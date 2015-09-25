@@ -7,8 +7,8 @@
     Notes:      Tool-1: Identify land suitable to cultivate a certain crop.
                 Tool-2: Identify areas that have similar biophysical characteristics to
                         the location currently under a certain type crop.
-                Tool-3: Calculate statistics of a raster and return the result in a CSV
-                        file format.
+                Tool-3: Calculate statistics from the land suitability output raster
+                        and return the result in a CSV file format.
 
                 Fully tested in ArcGIS 10.1.
                 Requires Spatial Analyst extension
@@ -35,7 +35,6 @@ def parameter(displayName, name, datatype, parameterType='Required', direction='
         parameterType=parameterType,
         direction=direction,
         multiValue=multiValue)
-
     return param
 
 
@@ -46,28 +45,12 @@ class Toolbox(object):
         self.alias = "Target Tools"
         self.canRunInBackground = False
         # List of tool classes associated with this toolbox
-        self.tools = [GetSuitableLand]
+        self.tools = [SuitableLandGenerator, StatisticsCalculator]
 
 
-class GetSuitableLand(object):
-    def __init__(self):
-        """Define the tool (tool name is the name of the class)."""
-        self.label = "Land Suitability"
-        self.description = ""
-        self.canRunInBackground = False
-        self.parameters = [
-            parameter("Input Rasters", "in_raster", "Value Table"),
-            parameter("Output Extent", "in_fczone", "Feature Class", parameterType='Optional'),
-            parameter("Output Raster", "out_raster", 'Raster Layer', direction='Output')
-        ]
-
-    def getParameterInfo(self):
-        """Define parameter definitions"""
-        self.parameters[0].columns = [['Raster Layer', 'Rasters'], ['Double', 'Min Value'], ['Double', 'Max Value'], ['Double', 'Optimal From'], ['Double', 'Optimal To'], ['String', 'Combine-Yes/No']]
-        return self.parameters
-
+class TargetingTool(object):
     def isLicensed(self):
-        """Set whether tool is licensed to execute."""
+        """Set license to execute tool."""
         spatialAnalystCheckedOut = False
         if arcpy.CheckExtension('Spatial') == 'Available':
             arcpy.CheckOutExtension('Spatial')
@@ -76,6 +59,24 @@ class GetSuitableLand(object):
             arcpy.AddMessage('ERROR: At a minimum, this script requires the Spatial Analyst Extension to run \n')
             sys.exit()
         return spatialAnalystCheckedOut
+
+
+class SuitableLandGenerator(TargetingTool):
+    def __init__(self):
+        """Define the tool (tool name is the name of the class)."""
+        self.label = "Land Suitability"
+        self.description = ""
+        self.canRunInBackground = False
+        self.parameters = [
+            parameter("Input Raster", "in_raster", "Value Table"),
+            parameter("Output Extent", "out_extent", "Feature Class", parameterType='Optional'),
+            parameter("Output Raster", "out_raster", 'Raster Layer', direction='Output')
+        ]
+
+    def getParameterInfo(self):
+        """Define parameter definitions"""
+        self.parameters[0].columns = [['Raster Layer', 'Rasters'], ['Double', 'Min Value'], ['Double', 'Max Value'], ['Double', 'Optimal From'], ['Double', 'Optimal To'], ['String', 'Combine-Yes/No']]
+        return self.parameters
 
     def updateParameters(self, parameters):
         """ Modify the values and properties of parameters before internal
@@ -532,19 +533,35 @@ class GetSuitableLand(object):
             out_fc = out_fc + ".shp"
         return arcpy.mapping.Layer(out_fc)
 
-    def setSpatialError(self, in_spataial_ref, ref, in_data, warning_msg):
+    def setSpatialError(self, in_spatial_ref, ref, in_data, warning_msg):
         """ Sets spatial error message
             Args:
-                in_spataial_ref: Input data spatial reference
+                in_spatial_ref: Input data spatial reference
                 ref: Input raster spatial reference
                 in_data: Input data - raster and feature class
                 warnign_msg: Spatial reference warning message
             Return: None
         """
-        if in_spataial_ref.Type != ref.Type:  # Check difference in spatial reference type
+        if in_spatial_ref.Type != ref.Type:  # Check difference in spatial reference type
             in_data.setWarningMessage(warning_msg)
-        elif in_spataial_ref.Type != "Geographic":
-            if in_spataial_ref.PCSCode != ref.PCSCode:  # Check projection code
+        elif in_spatial_ref.Type != "Geographic":
+            if in_spatial_ref.PCSCode != ref.PCSCode:  # Check projection code
                 in_data.setWarningMessage(warning_msg)
         else:
             pass
+
+
+class StatisticsCalculator(TargetingTool):
+    def __init__(self):
+        """Define the tool (tool name is the name of the class)."""
+        self.label = "Land Statistics"
+        self.description = ""
+        self.canRunInBackground = False
+        self.parameters = [
+            parameter("Input feature zone data", "in_fczone", "Feature Class"),
+            parameter("Input raster zone data", "in_raszone", "Raster Layer")
+        ]
+
+    def getParameterInfo(self):
+        """Define parameter definitions"""
+        return self.parameters
