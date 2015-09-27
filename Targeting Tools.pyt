@@ -558,10 +558,40 @@ class LandStatistics(TargetingTool):
         self.description = ""
         self.canRunInBackground = False
         self.parameters = [
+            parameter("Input raster zone data", "in_raszone", "Raster Layer"),
             parameter("Input feature zone data", "in_fczone", "Feature Class", parameterType='Optional'),
-            parameter("Input raster zone data", "in_raszone", "Raster Layer")
+            parameter("Feature zone field", "fczone_field", "Field", parameterType='Optional')
         ]
 
     def getParameterInfo(self):
         """Define parameter definitions"""
+        #self.parameters[2].type = "ValueList"
+        self.parameters[2].parameterDependencies = [self.parameters[1].name]
         return self.parameters
+
+    def updateParameters(self, parameters):
+        """ Modify the values and properties of parameters before internal
+            validation is performed.  This method is called whenever a parameter
+            has been changed.
+            Args:
+                parameters: Parameters from the tool.
+            Returns: Parameter values.
+        """
+        if parameters[1].value:
+            if parameters[1].altered:
+                in_fc_field = [f.name for f in arcpy.Describe(parameters[1].value).fields]
+                if parameters[2].value is None:
+                    parameters[2].value = in_fc_field[0]
+                else:
+                    if str(parameters[2].value) not in in_fc_field:
+                        parameters[2].value = in_fc_field[0]
+        return
+
+    def updateMessages(self, parameters):
+        """ Modify the messages created by internal validation for each tool
+            parameter.  This method is called after internal validation.
+            Args:
+                parameters: Parameters from the tool.
+            Returns: Internal validation messages.
+        """
+        return
