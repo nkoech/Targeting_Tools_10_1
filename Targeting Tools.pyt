@@ -561,7 +561,8 @@ class LandStatistics(TargetingTool):
         self.parameters = [
             parameter("Input raster zone data", "in_raszone", "Raster Layer"),
             parameter("Input feature zone data", "in_fczone", "Feature Layer", parameterType='Optional'),
-            parameter("Feature value field", "fval_field", "Field", parameterType="Optional"),
+            #parameter("Feature name field", "fval_field", "Field", parameterType="Optional"),
+            parameter("Feature name field", "fval_field", "String", parameterType="Optional"),
             parameter("Input value raster", "in_val_ras", "Raster Layer"),
             parameter("Output table", "out_table", "Table", direction="Output"),
             parameter("Ignore NoData in calculations", "nodata_calc", "Boolean", parameterType='Optional'),
@@ -571,12 +572,12 @@ class LandStatistics(TargetingTool):
     def getParameterInfo(self):
         """Define parameter definitions"""
         self.parameters[1].filter.list = ["Polygon"]  # Geometry type filter
-        self.parameters[2].filter.list = ["Short", "Long", "Float", "Single", "Double", "Text", "Date", "OID"]
-        self.parameters[2].parameterDependencies = [self.parameters[1].name]
+        #self.parameters[2].filter.list = ["Short", "Long", "Float", "Single", "Double", "Text", "Date", "OID"]
+        #self.parameters[2].parameterDependencies = [self.parameters[1].name]
         self.parameters[5].value = True  # Default value
         self.parameters[6].filter.type = "ValueList"
         self.parameters[6].filter.list = ["ALL", "MEAN", "MAJORITY", "MAXIMUM", "MEDIAN", "MINIMUM", "MINORITY", "RANGE", "STD", "SUM", "VARIETY", "MIN_MAX", "MEAN_STD", "MIN_MAX_MEAN"]
-        self.parameters[6].value = "ALL" # Default value
+        self.parameters[6].value = "ALL"  # Default value
         return self.parameters
 
     def updateParameters(self, parameters):
@@ -587,11 +588,14 @@ class LandStatistics(TargetingTool):
                 parameters: Parameters from the tool.
             Returns: Parameter values.
         """
-        if parameters[1].value:
-            if parameters[1].altered:
-                in_fc_field = [f.name for f in arcpy.Describe(parameters[1].value).fields]  # Get field names
-                if parameters[2].value is None:
-                    parameters[2].value = in_fc_field[0]  # Set initial field value
+        if parameters[1].value and parameters[1].altered:
+            in_fc_field = [f.name for f in arcpy.ListFields(parameters[1].value, field_type="String")]  # Get string field headers
+            parameters[2].filter.list = in_fc_field  # Updated filter list
+            if parameters[2].value is None:
+                parameters[2].value = in_fc_field[0]  # Set initial field value
+        else:
+            parameters[2].filter.list = []  # Empty filter list
+            parameters[2].value = ""  # Reset field value to None
         return
 
     def updateMessages(self, parameters):
@@ -612,8 +616,8 @@ class LandStatistics(TargetingTool):
         """
         try:
             in_raster = parameters[0].valueAsText.replace("\\","/")
-            out_csv = parameters[4].valueAsText.replace("\\","/")  # Get output file path
-            ras_temp_path = ntpath.dirname(out_csv)  # Get path without file name
+            out_csv_table = parameters[4].valueAsText.replace("\\","/")  # Get output file path
+            ras_temp_path = ntpath.dirname(out_csv_table)  # Get path without file name
             ras_temp_path += "/Temp_Stats/"
 
             if not os.path.exists(ras_temp_path):
@@ -628,29 +632,51 @@ class LandStatistics(TargetingTool):
                 arcpy.PolygonToRaster_conversion(in_fc, in_fc_field, ras_temp_path + "ras_poly", "CELL_CENTER", "NONE", in_raster)  # Convert polygon to raster
                 arcpy.gp.Times_sa(ras_temp_path + "ras_poly", "1000", ras_temp_path + "ras_multi")  # Process: Times
                 arcpy.management.Delete(ras_temp_path + "ras_poly")
-                arcpy.AddMessage("Initializing land statistics")
-                self.zonalStatisticsInit(in_raster, ras_temp_path, ras_add=True)
+                self.zonalStatisticsInit(in_raster, ras_temp_path, parameters, ras_add=True)
             else:
-                arcpy.AddMessage("Initializing land statistics")
-                self.zonalStatisticsInit(in_raster, ras_temp_path, ras_add=False)
+                self.zonalStatisticsInit(in_raster, ras_temp_path, parameters, ras_add=False)
 
             return
         except Exception as ex:
             arcpy.AddMessage('ERROR: {0}'.format(ex))
 
-    def zonalStatisticsInit(self, in_raster, ras_temp_path, ras_add):
+    def zonalStatisticsInit(self, in_raster, ras_temp_path, parameters, ras_add):
         """ Initialize the zonal statistics calculation process
             Args:
                 in_raster: Input land suitability raster.
                 ras_temp_path: Temporary folder
+                parameters: Tool parameters
                 ras_add: Variable to hint if another process should take place or not
             Returns: None.
         """
-
+        in_val_raster = parameters[3].valueAsText.replace("\\","/")
+        data_val = parameters[5].value
+        stats_type = parameters[6].valueAsText
         if ras_add:
+            arcpy.AddMessage("Initializing land statistics")
             arcpy.gp.Plus_sa(ras_temp_path + "ras_multi", in_raster, ras_temp_path + "ras_plus")  # Process: Plus
             arcpy.management.Delete(ras_temp_path + "ras_multi")
-            #self.zonalStatistics()
+            in_raster = ras_temp_path + "ras_plus"
+            self.calculateZonalStatistics(in_raster, in_val_raster, data_val, stats_type, ras_temp_path)
+            arcpy.management.Delete(ras_temp_path + "ras_plus")
         else:
             pass
-            #self.zonalStatistics()
+            self.calculateZonalStatistics(in_raster, in_val_raster, data_val, stats_type, ras_temp_path)
+
+    def calculateZonalStatistics(self, in_raster, in_val_raster, data_val, stats_type, ras_temp_path):
+        """ Calculate statistics on a given area  of interest - zone
+            Args:
+                in_raster: Input land suitability raster or plus raster
+                in_val_raster: Raster that contains the values on which to calculate a statistic.
+                data_val: Denotes whether NoData values in the Value input will influence the results or not
+                stats_type: Statistic type to be calculated
+                ras_temp_path: Temporary folder
+            Returns: Saves a dbf table to memory
+        """
+
+        if data_val:
+            arcpy.AddMessage("Calculating land statistics")
+            arcpy.gp.ZonalStatisticsAsTable_sa(in_raster, "Value", in_val_raster, ras_temp_path + "temp_zonal_stats.dbf", "DATA", stats_type)  # Process: Zonal Statistics as Table
+        else:
+            arcpy.AddMessage("Calculating land statistics")
+            arcpy.gp.ZonalStatisticsAsTable_sa(in_raster, "Value", in_val_raster, ras_temp_path + "temp_zonal_stats.dbf", "NODATA", stats_type)  # Process: Zonal Statistics as Table
