@@ -618,7 +618,7 @@ class LandStatistics(TargetingTool):
             in_raster = parameters[0].valueAsText.replace("\\","/")
             out_stat_table = parameters[4].valueAsText.replace("\\","/")  # Get output file path
             ras_temp_path = ntpath.dirname(out_stat_table)  # Get path without file name
-            ras_temp_path += "/Temp_Stats/"
+            ras_temp_path += "/Temp/"
 
             if not os.path.exists(ras_temp_path):
                 os.makedirs(ras_temp_path)  # Create new directory
@@ -631,21 +631,21 @@ class LandStatistics(TargetingTool):
                 arcpy.AddMessage("Converting polygon {0} to raster\n".format(in_fc_file))
                 arcpy.PolygonToRaster_conversion(in_fc, in_fc_field, ras_temp_path + "ras_poly", "CELL_CENTER", "NONE", in_raster)  # Convert polygon to raster
                 arcpy.gp.Times_sa(ras_temp_path + "ras_poly", "1000", ras_temp_path + "ras_multi")  # Process: Times
-                #arcpy.management.Delete(ras_temp_path + "ras_poly")
-                self.zonalStatisticsInit(in_raster, ras_temp_path, parameters, ras_add=True)
-                self.updateZonalStatisticsTable(in_fc_field, ras_temp_path)
+                self.zonalStatisticsInit(in_raster, ras_temp_path, out_stat_table, parameters, ras_add=True)
+                self.updateZonalStatisticsTable(in_fc_field, ras_temp_path, out_stat_table)
             else:
-                self.zonalStatisticsInit(in_raster, ras_temp_path, parameters, ras_add=False)
-
+                self.zonalStatisticsInit(in_raster, ras_temp_path, out_stat_table, parameters, ras_add=False)
+            shutil.rmtree(ras_temp_path)
             return
         except Exception as ex:
             arcpy.AddMessage('ERROR: {0}'.format(ex))
 
-    def zonalStatisticsInit(self, in_raster, ras_temp_path, parameters, ras_add):
+    def zonalStatisticsInit(self, in_raster, ras_temp_path, out_stat_table, parameters, ras_add):
         """ Initialize the zonal statistics calculation process
             Args:
                 in_raster: Input land suitability raster.
                 ras_temp_path: Temporary folder
+                out_stat_table: Output zonal statistics table
                 parameters: Tool parameters
                 ras_add: Variable to hint if another process should take place or not
             Returns: None.
@@ -656,39 +656,38 @@ class LandStatistics(TargetingTool):
         if ras_add:
             arcpy.AddMessage("Initializing land statistics")
             arcpy.gp.Plus_sa(ras_temp_path + "ras_multi", in_raster, ras_temp_path + "ras_plus")  # Process: Plus
-            #arcpy.management.Delete(ras_temp_path + "ras_multi")
+            arcpy.management.Delete(ras_temp_path + "ras_multi")
             in_raster = ras_temp_path + "ras_plus"
-            self.calculateZonalStatistics(in_raster, in_val_raster, data_val, stats_type, ras_temp_path)
-            #arcpy.management.Delete(ras_temp_path + "ras_plus")
+            self.calculateZonalStatistics(in_raster, in_val_raster, data_val, stats_type, out_stat_table)
+            arcpy.management.Delete(ras_temp_path + "ras_plus")
         else:
-            pass
-            self.calculateZonalStatistics(in_raster, in_val_raster, data_val, stats_type, ras_temp_path)
+            self.calculateZonalStatistics(in_raster, in_val_raster, data_val, stats_type, out_stat_table)
 
-    def calculateZonalStatistics(self, in_raster, in_val_raster, data_val, stats_type, ras_temp_path):
+    def calculateZonalStatistics(self, in_raster, in_val_raster, data_val, stats_type, out_stat_table):
         """ Calculate statistics on a given area  of interest - zone
             Args:
                 in_raster: Input land suitability raster or plus raster
                 in_val_raster: Raster that contains the values on which to calculate a statistic.
                 data_val: Denotes whether NoData values in the Value input will influence the results or not
                 stats_type: Statistic type to be calculated
-                ras_temp_path: Temporary folder
+                out_stat_table: Output zonal statistics table
             Returns: Saves a dbf table to memory
         """
 
         if data_val:
             arcpy.AddMessage("Calculating land statistics")
-            arcpy.gp.ZonalStatisticsAsTable_sa(in_raster, "Value", in_val_raster, ras_temp_path + "temp_zonal_stats.dbf", "DATA", stats_type)  # Process: Zonal Statistics as Table
+            arcpy.gp.ZonalStatisticsAsTable_sa(in_raster, "Value", in_val_raster, out_stat_table, "DATA", stats_type)  # Process: Zonal Statistics as Table
         else:
             arcpy.AddMessage("Calculating land statistics")
-            arcpy.gp.ZonalStatisticsAsTable_sa(in_raster, "Value", in_val_raster, ras_temp_path + "temp_zonal_stats.dbf", "NODATA", stats_type)  # Process: Zonal Statistics as Table
+            arcpy.gp.ZonalStatisticsAsTable_sa(in_raster, "Value", in_val_raster, out_stat_table, "NODATA", stats_type)  # Process: Zonal Statistics as Table
 
-    def updateZonalStatisticsTable(self, in_fc_field, ras_temp_path):
+    def updateZonalStatisticsTable(self, in_fc_field, ras_temp_path, out_stat_table):
         """ Edit zonal statistics output table
             Args:
                 in_fc_field: Feature name field
                 ras_temp_path: Temporary folder
+                out_stat_table: Output zonal statistics table
         """
-        out_stat_table = ras_temp_path + "temp_zonal_stats.dbf"
         ras_poly = ras_temp_path + "ras_poly"
         # Add fields to table
         if not arcpy.ListFields(out_stat_table, in_fc_field):
@@ -699,11 +698,27 @@ class LandStatistics(TargetingTool):
         # Process: Calculate Field
         arcpy.CalculateField_management(out_stat_table, "POLY_VAL", "([VALUE] - Right([VALUE] , 3)) / 1000", "VB", "")
         arcpy.CalculateField_management(out_stat_table, "LAND_RANK", "Right([VALUE] , 3)", "VB", "")
+        self.addValuesZonalStatisticsTable(ras_poly, out_stat_table)  # Add values to table
 
-        """with arcpy.da.SearchCursor(out_stat_table, ["VALUE"]) as cursor:
+    def addValuesZonalStatisticsTable(self, ras_poly, out_stat_table):
+        """ Copy field values from one table to another
+            Args:
+                ras_poly: Rasterized polygon
+                ras_temp_path: Temporary folder
+                out_stat_table: Output zonal statistics table
+        """
+
+        with arcpy.da.SearchCursor(ras_poly, ["VALUE"]) as cursor:
             for row in cursor:
-                updated_value = row[0]
-                with arcpy.da.UpdateCursor(out_stat_table, ["POLY_VAL"]) as cursor2:
-                    for row2 in cursor2:
-                        row2[0] = updated_value
-                        cursor2.updateRow(row2)"""
+                sql_exp1 = "VALUE = " + str(row[0])  # SQL expression
+                sql_exp2 = "POLY_VAL = " + str(row[0])
+                cursor2 = arcpy.da.SearchCursor(ras_poly, ["ADM2_NAME"], sql_exp1)
+                for row2 in cursor2:
+                    update_val = row2[0]
+                    with arcpy.da.UpdateCursor(out_stat_table, ["ADM2_NAME"], sql_exp2) as cursor3:  # Update values in the second table
+                        for row3 in cursor3:
+                            row3[0] = update_val
+                            cursor3.updateRow(row3)
+
+        arcpy.DeleteField_management(out_stat_table, "POLY_VAL")  # Process: Delete Field
+        arcpy.management.Delete(ras_poly)  # Delete polygon
