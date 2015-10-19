@@ -19,6 +19,7 @@
 
 import os
 import sys
+import re
 import arcpy
 import shutil
 import ntpath
@@ -72,6 +73,42 @@ class TargetingTool(object):
         in_fc_file = ntpath.basename(in_fc)
         return {"in_fc": in_fc, "in_fc_file": in_fc_file}
 
+    def formatValueTableData(self, lst):
+        """ Clean value table data
+            Args:
+                lst: Value table input raw data
+            Return:
+                lst_val: Value table input row data as list
+        """
+        lst_val = re.sub(r"'[^']*'", '""', lst).split()  # Substitute quoted input string with empty quotes to create list
+        if '""' in lst_val:
+            counter = 0
+            lst_quoted_val = []
+            lst_quoted_re = re.compile("'[^']*'")  # Get quoted string input
+            # Create list of quoted string input
+            for item in lst_quoted_re.findall(lst):
+                lst_quoted_val.append(item)
+            # Replace empty quotes in list with quoted string inputs
+            for j, str_val in enumerate(lst_val):
+                if str_val == '""':
+                    if counter < len(lst_quoted_val):
+                        lst_val[j] = self.trimString(lst_quoted_val[counter])
+                    counter += 1
+        return lst_val
+
+    def trimString(self, in_str):
+        """ Trim leading and trailing quotation mark
+            Args:
+                in_str: String to be cleaned
+            Return:
+                out_str: Cleaned string
+        """
+        if in_str.startswith("'"):
+            in_str = in_str.lstrip("'")
+        if in_str.endswith("'"):
+            in_str = in_str.rstrip("'")
+        return in_str
+
 
 class LandSuitability(TargetingTool):
     def __init__(self):
@@ -98,7 +135,6 @@ class LandSuitability(TargetingTool):
                 parameters: Parameters from the tool.
             Returns: Parameter values.
         """
-
         if parameters[0].value:
             if parameters[0].altered:
                 in_raster = parameters[0]  # Raster from the value table
@@ -106,6 +142,8 @@ class LandSuitability(TargetingTool):
                 ras_max_min = True
                 # Get values from the generator function and update value table
                 for ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine, row_count in self.getRowValue(in_raster, ras_max_min):
+                    if " " in ras_file:  # Check if there is space in file path
+                        ras_file = "'" + ras_file + "'"
                     self.updateValueTable(in_raster, opt_from_val, opt_to_val, ras_combine, vtab, ras_file, minVal, maxVal)
         return
 
@@ -485,22 +523,23 @@ class LandSuitability(TargetingTool):
                 Optimal From, Optimal To, raster file path, raster minimum value and maximum value
         """
         for i, lst in enumerate(in_raster.valueAsText.split(";")):
-            ras_combine = lst.split()[-1]  # Get combine option
             row_count = i
+            lst_val = super(LandSuitability, self).formatValueTableData(lst)  # Clean value table data
+            ras_file = lst_val[0]  # Get raster file path
+            ras_file = ras_file.replace("\\","/")
+            minVal = lst_val[1]  # Minimum raster value
+            maxVal = lst_val[2]  # Maximum raster value
+            opt_from_val = lst_val[3]  # Get crop optimum value from
+            opt_to_val = lst_val[4]  # Get crop optimum value to
+            ras_combine = lst_val[5]  # Get combine option
             if ras_max_min:
-                opt_from_val = lst.split()[-3]  # Get crop optimum value from
-                opt_to_val = lst.split()[-2]  # Get crop optimum value to
-                ras_file = lst.rsplit(' ', 5)[0]  # Get raster file path
-                ras_file = ras_file.replace("\\","/")
-                if lst.split()[-5] == "#" or lst.split()[-4] == "#" or ras_combine == "#":
+                if minVal == "#" or maxVal == "#" or ras_combine == "#":
                     paramInRaster = arcpy.Raster(ras_file.replace("'", ""))  # Replace quote on path with null
                     minVal = paramInRaster.minimum  # Minimum raster value
                     maxVal = paramInRaster.maximum  # Maximum raster value
                     ras_combine = "No"
                     yield ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine, row_count  # Return output
                 else:
-                    minVal = lst.split()[-5]  # Minimum raster value
-                    maxVal = lst.split()[-4]  # Maximum raster value
                     if row_count == 0:  # Set first row to "No"
                         ras_combine = "No"
                         yield ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine, row_count
@@ -843,12 +882,14 @@ class LandStatistics(TargetingTool):
         """
         for i, lst in enumerate(in_val_raster.valueAsText.split(";")):
             row_count = i
-            ras_val_file = lst.rsplit(' ', 4)[0]  # Get input raster value file path
-            ras_val_file = ras_val_file.replace("\\", "/")
-            stats_type = lst.split()[-4]  # Get statistics type
-            data_val = lst.split()[-3]  # Get ignore data value
-            out_table_name = lst.split()[-2]  # Get long table name
-            table_short_name = lst.split()[-1]  # Table
+            lst_val = super(LandStatistics, self).formatValueTableData(lst)  # Clean value table data
+            ras_val_file = lst_val[0]
+            ras_val_file = ras_val_file.replace("\\","/")
+            stats_type = lst_val[1]
+            data_val = lst_val[2]
+            out_table_name = lst_val[3]
+            table_short_name = lst_val[4]
+            # Check if data is empty
             if stats_type == "#" or data_val == "#":
                 stats_type = "ALL"
                 data_val = "No"
@@ -866,12 +907,18 @@ class LandStatistics(TargetingTool):
             stats_type_edit = "MAXIMUM"
         elif stats_type == "MIN":
             stats_type_edit = "MINIMUM"
-        elif stats_type in {"SD", "S.D.", "SN", "SR", "STDEV", "STANDARD_DEVIATION"}:
+        elif stats_type in {"SD", "S.D.", "SN", "SR", "STDEV", "STANDARD DEVIATION", "STANDARD_DEVIATION"}:
             stats_type_edit = "STD"
+        elif stats_type in {"MIN MAX", "MINIMUM MAX", "MIN MAXIMUM", "MINIMUM MAXIMUM"}:
+            stats_type_edit = "MIN_MAX"
         elif stats_type in {"MINIMUM_MAX", "MIN_MAXIMUM", "MINIMUM_MAXIMUM"}:
             stats_type_edit = "MIN_MAX"
+        elif stats_type in {"MEAN STD", "MEAN SD", "MEAN S.D.", "MEAN SN", "MEAN SR", "MEAN STDEV", "MEAN STANDARD DEVIATION"}:
+            stats_type_edit = "MEAN_STD"
         elif stats_type in {"MEAN_SD", "MEAN_S.D.", "MEAN_SN", "MEAN_SR", "MEAN_STDEV", "MEAN_STANDARD_DEVIATION"}:
             stats_type_edit = "MEAN_STD"
+        elif stats_type in {"MIN MAX MEAN", "MINIMUM MAX MEAN", "MIN MAXIMUM MEAN", "MINIMUM MAXIMUM MEAN"}:
+            stats_type_edit = "MIN_MAX_MEAN"
         elif stats_type in {"MINIMUM_MAX_MEAN", "MIN_MAXIMUM_MEAN", "MINIMUM_MAXIMUM_MEAN"}:
             stats_type_edit = "MIN_MAX_MEAN"
         else:
