@@ -708,6 +708,7 @@ class LandStatistics(TargetingTool):
         """
         try:
             in_raster = parameters[0].valueAsText.replace("\\","/")
+            in_val_raster = parameters[9]
             out_table = parameters[10].valueAsText.replace("\\","/")  # Get output folder path
             ras_temp_path = out_table + "/Temp/"
 
@@ -723,12 +724,13 @@ class LandStatistics(TargetingTool):
                 arcpy.PolygonToRaster_conversion(in_fc, in_fc_field, ras_temp_path + "ras_poly", "CELL_CENTER", "NONE", in_raster)  # Convert polygon to raster
                 arcpy.gp.Times_sa(ras_temp_path + "ras_poly", "1000", ras_temp_path + "ras_multi")  # Process: Times
                 in_raster = self.reclassifyRaster(parameters, ras_temp_path)  # Reclassify input raster
-                self.zonalStatisticsInit(in_raster, ras_temp_path, out_table, parameters, ras_add=True)
-                #self.updateZonalStatisticsTable(in_fc_field, ras_temp_path, out_table)
+                self.zonalStatisticsInit(in_raster, ras_temp_path, parameters, ras_add=True)
+                for out_table_name, table_short_name in self.getStatisticsRasterValue(in_val_raster, table_only=True):
+                    self.updateZonalStatisticsTable(in_val_raster, in_fc_field, ras_temp_path, out_table_name, table_short_name)
             else:
                 in_raster = self.reclassifyRaster(parameters, ras_temp_path)
-                self.zonalStatisticsInit(in_raster, ras_temp_path, out_table, parameters, ras_add=False)
-            shutil.rmtree(ras_temp_path)
+                self.zonalStatisticsInit(in_raster, ras_temp_path, parameters, ras_add=False)
+            #shutil.rmtree(ras_temp_path)
             return
         except Exception as ex:
             arcpy.AddMessage('ERROR: {0}'.format(ex))
@@ -841,12 +843,11 @@ class LandStatistics(TargetingTool):
         reclass_raster.save(ras_temp_path + "ras_reclass")
         return ras_temp_path + "ras_reclass"
 
-    def zonalStatisticsInit(self, in_raster, ras_temp_path, out_table, parameters, ras_add):
+    def zonalStatisticsInit(self, in_raster, ras_temp_path, parameters, ras_add):
         """ Initialize the zonal statistics calculation process
             Args:
                 in_raster: Input land suitability raster.
                 ras_temp_path: Temporary folder
-                out_stat_table: Output zonal statistics table
                 parameters: Tool parameters
                 ras_add: Variable to hint if another process should take place or not
             Returns: None.
@@ -860,21 +861,21 @@ class LandStatistics(TargetingTool):
                 arcpy.management.Delete(ras_temp_path + "ras_reclass")
             in_raster = ras_temp_path + "ras_plus"
             arcpy.BuildRasterAttributeTable_management(in_raster, "Overwrite")  # Build attribute table for raster
-            for row_count, ras_val_file, stats_type, data_val, out_table_name, table_short_name in self.getStatisticsRasterValue(in_val_raster):
+            for row_count, ras_val_file, stats_type, data_val, out_table_name, table_short_name in self.getStatisticsRasterValue(in_val_raster, table_only=False):
                 stats_type_edit = self.formatStatisticsType(stats_type)
-                out_stat_table = out_table + "/" + out_table_name + ".dbf"
+                out_stat_table = ras_temp_path + out_table_name + ".dbf"
                 self.calculateZonalStatistics(in_raster, ras_val_file, stats_type_edit, data_val, out_stat_table)
             arcpy.management.Delete(ras_temp_path + "ras_plus")
         else:
             arcpy.BuildRasterAttributeTable_management(in_raster, "Overwrite")  # Build attribute table for raster
-            for row_count, ras_val_file, stats_type, data_val, out_table_name, table_short_name in self.getStatisticsRasterValue(in_val_raster):
+            for row_count, ras_val_file, stats_type, data_val, out_table_name, table_short_name in self.getStatisticsRasterValue(in_val_raster, table_only=False):
                 stats_type_edit = self.formatStatisticsType(stats_type)
-                out_stat_table = out_table + "/" + out_table_name + ".dbf"
+                out_stat_table = ras_temp_path + out_table_name + ".dbf"
                 self.calculateZonalStatistics(in_raster, ras_val_file, stats_type_edit, data_val, out_stat_table)
             if arcpy.Exists(ras_temp_path + "ras_reclass"):
                 arcpy.management.Delete(ras_temp_path + "ras_reclass")
 
-    def getStatisticsRasterValue(self, in_val_raster):
+    def getStatisticsRasterValue(self, in_val_raster, table_only):
         """ Get row statistics parameters from the value table
             Args:
                 in_val_raster: Value table parameter with the statistics parameters
@@ -890,12 +891,15 @@ class LandStatistics(TargetingTool):
             out_table_name = lst_val[3]
             table_short_name = lst_val[4]
             # Check if data is empty
-            if stats_type == "#" or data_val == "#":
-                stats_type = "ALL"
-                data_val = "No"
-                yield row_count, ras_val_file, stats_type, data_val, out_table_name, table_short_name
+            if not table_only:
+                if stats_type == "#" or data_val == "#":
+                    stats_type = "ALL"
+                    data_val = "No"
+                    yield row_count, ras_val_file, stats_type, data_val, out_table_name, table_short_name
+                else:
+                    yield row_count, ras_val_file, stats_type, data_val, out_table_name, table_short_name
             else:
-                yield row_count, ras_val_file, stats_type, data_val, out_table_name, table_short_name
+                yield out_table_name, table_short_name
 
     def formatStatisticsType(self, stats_type):
         """ Format statistics type string to the right format
@@ -942,14 +946,33 @@ class LandStatistics(TargetingTool):
             arcpy.AddMessage("Calculating land statistics for {0}".format(ras_val_file))
             arcpy.gp.ZonalStatisticsAsTable_sa(in_raster, "Value", ras_val_file, out_stat_table, "NODATA", stats_type_edit)  # Process: Zonal Statistics as Table
 
-    def updateZonalStatisticsTable(self, in_fc_field, ras_temp_path, out_stat_table):
+    def updateZonalStatisticsTable(self, in_val_raster, in_fc_field, ras_temp_path, out_table_name, table_short_name):
         """ Edit zonal statistics output table
             Args:
+                in_val_raster: Input value raster
                 in_fc_field: Feature name field
                 ras_temp_path: Temporary folder
-                out_stat_table: Output zonal statistics table
+                out_table_name: Output .dbf table name
+                table_short_name: A short name to append to table columns
         """
-        ras_poly = ras_temp_path + "ras_poly"
+        out_stat_table = ras_temp_path + out_table_name + ".dbf"
+        if len(in_val_raster.valueAsText.split(";")) > 0:
+            fields= arcpy.ListFields(out_stat_table)  # Get fields
+            fieldinfo = arcpy.FieldInfo()  # Create a fieldinfo object
+            # Iterate through the fields and set them to fieldinfo
+            for field in fields:
+                if field.name in {"AREA", "MIN", "MAX", "RANGE", "MEAN", "STD", "SUM", "VARIETY", "MAJORITY", "MINORITY", "MEDIAN"}:
+                    fieldinfo.addField(field.name, table_short_name + "_" + field.name, "VISIBLE", "")
+            out_table_view = out_table_name + "_view"
+            # Create a view layer in memory with fields as set in fieldinfo object
+            arcpy.MakeTableView_management(out_stat_table, out_table_view, "", "", fieldinfo)
+            # make a copy of the view in disk
+            arcpy.CopyRows_management(out_table_name + "_view", ras_temp_path + out_table_view + ".dbf")
+
+
+
+
+        """ras_poly = ras_temp_path + "ras_poly"
         # Add fields to table
         if not arcpy.ListFields(out_stat_table, in_fc_field):
             arcpy.AddField_management(out_stat_table, in_fc_field, "STRING")
@@ -959,7 +982,7 @@ class LandStatistics(TargetingTool):
         # Process: Calculate Field
         arcpy.CalculateField_management(out_stat_table, "POLY_VAL", "([VALUE] - Right([VALUE] , 3)) / 1000", "VB", "")
         arcpy.CalculateField_management(out_stat_table, "LAND_RANK", "Right([VALUE] , 3)", "VB", "")
-        self.addValuesZonalStatisticsTable(ras_poly, out_stat_table)  # Add values to table
+        self.addValuesZonalStatisticsTable(ras_poly, out_stat_table)  # Add values to table """
 
     def addValuesZonalStatisticsTable(self, ras_poly, out_stat_table):
         """ Copy field values from one table to another
