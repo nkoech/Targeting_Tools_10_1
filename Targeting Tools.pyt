@@ -725,8 +725,11 @@ class LandStatistics(TargetingTool):
                 arcpy.gp.Times_sa(ras_temp_path + "ras_poly", "1000", ras_temp_path + "ras_multi")  # Process: Times
                 in_raster = self.reclassifyRaster(parameters, ras_temp_path)  # Reclassify input raster
                 self.zonalStatisticsInit(in_raster, ras_temp_path, parameters, ras_add=True)
-                for out_table_name, table_short_name in self.getStatisticsRasterValue(in_val_raster, table_only=True):
-                    self.updateZonalStatisticsTable(in_val_raster, in_fc_field, ras_temp_path, out_table_name, table_short_name)
+                first_stat_table = ""
+                for row_count, out_table_name, table_short_name in self.getStatisticsRasterValue(in_val_raster, table_only=True):
+                    if row_count == 0:
+                        first_stat_table = ras_temp_path + out_table_name + "_view" + ".dbf"
+                    self.updateZonalStatisticsTable(in_val_raster, in_fc_field, out_table, ras_temp_path, row_count, out_table_name, first_stat_table, table_short_name)
             else:
                 in_raster = self.reclassifyRaster(parameters, ras_temp_path)
                 self.zonalStatisticsInit(in_raster, ras_temp_path, parameters, ras_add=False)
@@ -899,7 +902,7 @@ class LandStatistics(TargetingTool):
                 else:
                     yield row_count, ras_val_file, stats_type, data_val, out_table_name, table_short_name
             else:
-                yield out_table_name, table_short_name
+                yield row_count, out_table_name, table_short_name
 
     def formatStatisticsType(self, stats_type):
         """ Format statistics type string to the right format
@@ -946,28 +949,36 @@ class LandStatistics(TargetingTool):
             arcpy.AddMessage("Calculating land statistics for {0}".format(ras_val_file))
             arcpy.gp.ZonalStatisticsAsTable_sa(in_raster, "Value", ras_val_file, out_stat_table, "NODATA", stats_type_edit)  # Process: Zonal Statistics as Table
 
-    def updateZonalStatisticsTable(self, in_val_raster, in_fc_field, ras_temp_path, out_table_name, table_short_name):
+    def updateZonalStatisticsTable(self, in_val_raster, in_fc_field, out_table, ras_temp_path, row_count, out_table_name, first_stat_table, table_short_name):
         """ Edit zonal statistics output table
             Args:
                 in_val_raster: Input value raster
                 in_fc_field: Feature name field
+                out_table: Ouput folder
                 ras_temp_path: Temporary folder
+                row_count: Number of rows with input in the value table
                 out_table_name: Output .dbf table name
+                first_stat_table: First output table name in the value table input
                 table_short_name: A short name to append to table columns
+            Return: None
         """
         out_stat_table = ras_temp_path + out_table_name + ".dbf"
+        move_stat_table = out_table + "/" + out_table_name + ".dbf"
         if len(in_val_raster.valueAsText.split(";")) > 0:
-            fields= arcpy.ListFields(out_stat_table)  # Get fields
-            fieldinfo = arcpy.FieldInfo()  # Create a fieldinfo object
-            # Iterate through the fields and set them to fieldinfo
-            for field in fields:
-                if field.name in {"AREA", "MIN", "MAX", "RANGE", "MEAN", "STD", "SUM", "VARIETY", "MAJORITY", "MINORITY", "MEDIAN"}:
-                    fieldinfo.addField(field.name, table_short_name + "_" + field.name, "VISIBLE", "")
-            out_table_view = out_table_name + "_view"
-            # Create a view layer in memory with fields as set in fieldinfo object
-            arcpy.MakeTableView_management(out_stat_table, out_table_view, "", "", fieldinfo)
-            # make a copy of the view in disk
-            arcpy.CopyRows_management(out_table_name + "_view", ras_temp_path + out_table_view + ".dbf")
+            arcpy.AddMessage("Renaming fields in {0}\n".format(out_table_name + ".dbf"))
+            out_table_view = self.renameTableField(out_stat_table, out_table_name, table_short_name, ras_temp_path)  # Rename table fields
+            arcpy.AddMessage("Moving file {0} to {1}\n".format(out_stat_table, move_stat_table))
+            self.moveFile(out_stat_table, move_stat_table)  # Move original tables to output folders
+            if row_count > 0:
+                field_names = [f.name for f in arcpy.ListFields(out_table_view)]  # Get all field names
+                del_fields = {"OID", "VALUE", "COUNT"}  # Fields to be excluded in the join
+                req_fields = [i for i in field_names if i not in del_fields]  # Fields to included in the join
+                arcpy.AddMessage("Joining {0} to {1} \n".format(out_table_view, first_stat_table))
+                arcpy.JoinField_management(first_stat_table, "VALUE", out_table_view, "VALUE", req_fields)  # Join tables
+                arcpy.management.Delete(out_table_view)
+        else:
+            arcpy.AddMessage("Moving file {0} to {1}\n".format(out_stat_table, move_stat_table))
+            self.moveFile(out_stat_table, move_stat_table)
 
 
 
@@ -983,6 +994,39 @@ class LandStatistics(TargetingTool):
         arcpy.CalculateField_management(out_stat_table, "POLY_VAL", "([VALUE] - Right([VALUE] , 3)) / 1000", "VB", "")
         arcpy.CalculateField_management(out_stat_table, "LAND_RANK", "Right([VALUE] , 3)", "VB", "")
         self.addValuesZonalStatisticsTable(ras_poly, out_stat_table)  # Add values to table """
+
+    def renameTableField(self, out_stat_table, out_table_name, table_short_name, ras_temp_path):
+        """ Rename table fields
+            Args:
+                out_stat_table: Output table path
+                out_table_name: Output table name
+                table_short_name: Field keyword
+                ras_temp_path: Temporary folder
+            return:
+                out_table_view: a table with renamed fields
+        """
+        fields = arcpy.ListFields(out_stat_table)  # Get fields
+        fieldinfo = arcpy.FieldInfo()  # Create a fieldinfo object
+        # Iterate through the fields and set them to fieldinfo
+        for field in fields:
+            if field.name in {"AREA", "MIN", "MAX", "RANGE", "MEAN", "STD", "SUM", "VARIETY", "MAJORITY", "MINORITY", "MEDIAN"}:
+                fieldinfo.addField(field.name, table_short_name + "_" + field.name, "VISIBLE", "")
+        out_table_view = out_table_name + "_view"
+        # Create a view layer in memory with fields as set in fieldinfo object
+        arcpy.MakeTableView_management(out_stat_table, out_table_view, "", "", fieldinfo)
+        # make a copy of the view in disk
+        arcpy.CopyRows_management(out_table_name + "_view", ras_temp_path + out_table_view + ".dbf")
+        out_table_view = ras_temp_path + out_table_view + ".dbf"
+        return out_table_view
+
+    def moveFile(self, current_path, new_path):
+        """ Move a table from the current directory to another
+            Args:
+                current_path: Current location of the file
+                new_path: The new directory to move the file to
+            Return: None
+        """
+        shutil.move(current_path, new_path)  # Move individual tables to output folder
 
     def addValuesZonalStatisticsTable(self, ras_poly, out_stat_table):
         """ Copy field values from one table to another
