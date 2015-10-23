@@ -160,7 +160,7 @@ class LandSuitability(TargetingTool):
                 maxVal: Maximum raster data value
             Returns: Updated value table values.
         """
-        # End of value table, now update update value table last row with new column data
+        # End of value table, now update value table last row with new column data
         if opt_from_val == "#" and opt_to_val == "#" and ras_combine == "#":
             vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, maxVal, "#", "#", "#"))
             in_raster.value = vtab.exportToString()
@@ -667,6 +667,18 @@ class LandStatistics(TargetingTool):
         else:
             parameters[8].filter.list = []  # Empty filter list
             parameters[8].value = ""  # Reset field value to None
+
+        # Update value table inputs
+        if parameters[9].value:
+            if parameters[9].altered:
+                in_val_raster = parameters[9]  # Input value raster from the value table
+                vtab = arcpy.ValueTable(len(in_val_raster.columns))  # Number of value table columns
+                for row_count, ras_val_file, stats_type, data_val, out_table_name, table_short_name in self.getStatisticsRasterValue(in_val_raster, table_only=False):
+                    if " " in ras_val_file:  # Check if there is space in raster file path
+                        ras_val_file = "'" + ras_val_file + "'"
+                    if " " in out_table_name:
+                        out_table_name = "'" + out_table_name + "'"
+                    self.updateValueTableInput(in_val_raster, ras_val_file, stats_type, data_val, out_table_name, table_short_name, vtab)
         return
 
     def updateMessages(self, parameters):
@@ -752,6 +764,25 @@ class LandStatistics(TargetingTool):
                         parameters[i].enabled = boolean_val
                 else:
                     parameters[i].enabled = True
+
+    def updateValueTableInput(self, in_val_raster, ras_val_file, stats_type, data_val, out_table_name, table_short_name, vtab):
+        """ Update value parameters in the tool.
+            Args:
+                in_val_raster: Input value raster parameter
+                ras_val_file: Input value raster
+                stats_type: Statistic type to be calculated
+                data_val: Denotes whether NoData values in the Value input will influence the results or not
+                out_stat_table: Output zonal statistics table
+                table_short_name: Unique string to be concatenated with table field name
+                vtab: Number of value table columns
+            Returns: Parameter values.
+        """
+        if table_short_name == "#":
+            vtab.addRow('{0} {1} {2} {3} {4}'.format(ras_val_file, stats_type, data_val, out_table_name, "#"))
+            in_val_raster.value = vtab.exportToString()
+        if table_short_name != "#":
+            vtab.addRow('{0} {1} {2} {3} {4}'.format(ras_val_file, stats_type, data_val, out_table_name, table_short_name))
+            in_val_raster.value = vtab.exportToString()
 
     def setFieldWarningMessage(self, parameter_1, parameter_2, warning_message):
         """ Set warning messages on input table fields
