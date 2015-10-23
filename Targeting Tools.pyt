@@ -708,12 +708,8 @@ class LandStatistics(TargetingTool):
         """
         try:
             in_raster = parameters[0].valueAsText.replace("\\", "/")
-            in_val_raster = parameters[9]
             out_table = parameters[10].valueAsText.replace("\\", "/")  # Get output folder path
             ras_temp_path = out_table + "/Temp/"
-            first_stat_table = ""
-            single_out_stat_table = ""
-            single_move_stat_table = ""
 
             if not os.path.exists(ras_temp_path):
                 os.makedirs(ras_temp_path)  # Create new directory
@@ -728,34 +724,12 @@ class LandStatistics(TargetingTool):
                 arcpy.gp.Times_sa(ras_temp_path + "ras_poly", "1000", ras_temp_path + "ras_multi")  # Process: Times
                 in_raster = self.reclassifyRaster(parameters, ras_temp_path)  # Reclassify input raster
                 self.zonalStatisticsInit(in_raster, ras_temp_path, parameters, ras_add=True)
-                if len(in_val_raster.valueAsText.split(";")) > 1:
-                    for row_count, out_table_name, table_short_name in self.getStatisticsRasterValue(in_val_raster, table_only=True):
-                        if row_count == 0:
-                            first_stat_table = ras_temp_path + out_table_name + "_view" + ".dbf"
-                        self.updateZonalStatisticsTable(out_table, ras_temp_path, row_count, out_table_name, first_stat_table, table_short_name)
-                    self.addFieldValueZonalStatisticsTable(parameters, out_table, ras_temp_path, first_stat_table)  # Add new fields and values
-                else:
-                    for row_count, out_table_name, table_short_name in self.getStatisticsRasterValue(in_val_raster, table_only=True):
-                        if row_count == 0:
-                            single_out_stat_table = ras_temp_path + out_table_name + ".dbf"
-                    self.addFieldValueZonalStatisticsTable(parameters, out_table, ras_temp_path, single_out_stat_table)
+                self.configZonalStatisticsTable(parameters, ras_temp_path, out_table, in_vector=True)
             else:
                 in_raster = self.reclassifyRaster(parameters, ras_temp_path)
                 self.zonalStatisticsInit(in_raster, ras_temp_path, parameters, ras_add=False)
-                if len(in_val_raster.valueAsText.split(";")) > 1:
-                    for row_count, out_table_name, table_short_name in self.getStatisticsRasterValue(in_val_raster, table_only=True):
-                        if row_count == 0:
-                            first_stat_table = ras_temp_path + out_table_name + "_view" + ".dbf"
-                        self.updateZonalStatisticsTable(out_table, ras_temp_path, row_count, out_table_name, first_stat_table, table_short_name)
-                    self.addFieldValueZonalStatisticsTable(parameters, out_table, ras_temp_path, first_stat_table)
-                else:
-                    for row_count, out_table_name, table_short_name in self.getStatisticsRasterValue(in_val_raster, table_only=True):
-                        if row_count == 0:
-                            single_out_stat_table = ras_temp_path + out_table_name + ".dbf"
-                            single_move_stat_table = out_table + "/" + out_table_name + ".dbf"
-                    arcpy.AddMessage("Moving file {0} to {1}\n".format(single_out_stat_table, single_move_stat_table))
-                    self.moveFile(single_out_stat_table, single_move_stat_table)
-            #shutil.rmtree(ras_temp_path)
+                self.configZonalStatisticsTable(parameters, ras_temp_path, out_table, in_vector=False)
+            shutil.rmtree(ras_temp_path)
             return
         except Exception as ex:
             arcpy.AddMessage('ERROR: {0}'.format(ex))
@@ -917,9 +891,11 @@ class LandStatistics(TargetingTool):
             table_short_name = lst_val[4]
             # Check if data is empty
             if not table_only:
-                if stats_type == "#" or data_val == "#":
+                if stats_type == "#" or data_val == "#" or out_table_name == "#":
                     stats_type = "ALL"
                     data_val = "No"
+                    out_table_name = ntpath.basename(ras_val_file)  # Get input raster file name
+                    out_table_name = os.path.splitext(out_table_name)[0]  # Get input raster file name without extension
                     yield row_count, ras_val_file, stats_type, data_val, out_table_name, table_short_name
                 else:
                     yield row_count, ras_val_file, stats_type, data_val, out_table_name, table_short_name
@@ -970,6 +946,37 @@ class LandStatistics(TargetingTool):
         else:
             arcpy.AddMessage("Calculating land statistics for {0}".format(ras_val_file))
             arcpy.gp.ZonalStatisticsAsTable_sa(in_raster, "Value", ras_val_file, out_stat_table, "NODATA", stats_type_edit)  # Process: Zonal Statistics as Table
+
+    def configZonalStatisticsTable(self, parameters, ras_temp_path, out_table, in_vector):
+        """ Manipulate zonal statistics table
+            Args:
+                parameters: Value table input parameters
+                ras_temp_path: Temporary folder
+                out_table: Output zonal statistics directory
+                in_vector: Input feature class
+            Return: None
+        """
+        in_val_raster = parameters[9]
+        first_stat_table = ""
+        single_out_stat_table = ""
+        single_move_stat_table = ""
+        if len(in_val_raster.valueAsText.split(";")) > 1:
+            for row_count, out_table_name, table_short_name in self.getStatisticsRasterValue(in_val_raster, table_only=True):
+                if row_count == 0:
+                    first_stat_table = ras_temp_path + out_table_name + "_view" + ".dbf"
+                table_short_name = table_short_name.upper()
+                self.updateZonalStatisticsTable(out_table, ras_temp_path, row_count, out_table_name, first_stat_table, table_short_name)
+            self.addFieldValueZonalStatisticsTable(parameters, out_table, ras_temp_path, first_stat_table) # Add new fields and values
+        else:
+            for row_count, out_table_name, table_short_name in self.getStatisticsRasterValue(in_val_raster, table_only=True):
+                if row_count == 0:
+                    single_out_stat_table = ras_temp_path + out_table_name + ".dbf"
+                    single_move_stat_table = out_table + "/" + out_table_name + ".dbf"
+            if in_vector:
+                self.addFieldValueZonalStatisticsTable(parameters, out_table, ras_temp_path, single_out_stat_table)
+            else:
+                arcpy.AddMessage("Moving file {0} to {1}\n".format(single_out_stat_table, single_move_stat_table))
+                self.moveFile(single_out_stat_table, single_move_stat_table)
 
     def updateZonalStatisticsTable(self, out_table, ras_temp_path, row_count, out_table_name, first_stat_table, table_short_name):
         """ Edit zonal statistics output table
