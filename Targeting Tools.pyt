@@ -678,6 +678,8 @@ class LandStatistics(TargetingTool):
                         ras_val_file = "'" + ras_val_file + "'"
                     if " " in out_table_name:
                         out_table_name = "'" + out_table_name + "'"
+                    if " " in stats_type:
+                        stats_type = "'" + stats_type + "'"
                     self.updateValueTableInput(in_val_raster, ras_val_file, stats_type, data_val, out_table_name, table_short_name, vtab)
         return
 
@@ -709,6 +711,13 @@ class LandStatistics(TargetingTool):
             if parameters[5].value and parameters[6].value:
                 warning_message = 'This field is similar to "To value field"'
                 self.setFieldWarningMessage(parameters[5], parameters[6], warning_message)
+        if parameters[9].value and parameters[9].altered:
+            in_val_raster = parameters[9]
+            for row_count, ras_val_file, stats_type, data_val, out_table_name, table_short_name in self.getStatisticsRasterValue(in_val_raster, table_only=False):
+                self.statisticsTypeErrorMessage(in_val_raster, stats_type)  # Set error message for statistics type
+                if data_val.lower() != "yes":
+                    if data_val.lower() != "no":
+                        in_val_raster.setErrorMessage("Ignore NoData field expects \"Yes\" or \"No\" input value")
         return
 
     def execute(self, parameters, messages):
@@ -795,6 +804,18 @@ class LandStatistics(TargetingTool):
         if parameter_1.altered or parameter_2.altered:
             if parameter_1.valueAsText == parameter_2.valueAsText:
                 parameter_2.setWarningMessage(warning_message)
+
+    def statisticsTypeErrorMessage(self, in_val_raster, stats_type):
+        """ Set error message for statistics type
+            Args:
+                in_val_raster: Input value raster
+                stats_type: Input statistics type from the value table
+            Return: None
+        """
+        if stats_type.upper() not in {"ALL", "MEAN", "MAJORITY", "MAX", "MAXIMUM", "MEDIAN", "MINIMUM", "MIN", "MINORITY", "RANGE",
+                              "SD", "SN", "SR", "STDEV", "STANDARD DEVIATION", "STD", "SUM", "VARIETY"}:
+            in_val_raster.setErrorMessage("Allowed Statistics type: {0}".format("ALL | MEAN | MAJORITY | MAX | MAXIMUM | MEDIAN | MINIMUM | MIN | MINORITY | "
+                                                                                "RANGE | SUM | VARIETY | STD | SD | SN | SR | STDEV | STANDARD DEVIATION"))
 
     def reclassifyRaster(self, parameters, ras_temp_path):
         """ Reclassify input raster
@@ -943,20 +964,8 @@ class LandStatistics(TargetingTool):
             stats_type_edit = "MAXIMUM"
         elif stats_type == "MIN":
             stats_type_edit = "MINIMUM"
-        elif stats_type in {"SD", "S.D.", "SN", "SR", "STDEV", "STANDARD DEVIATION", "STANDARD_DEVIATION"}:
+        elif stats_type in {"SD", "SN", "SR", "STDEV", "STANDARD DEVIATION"}:
             stats_type_edit = "STD"
-        elif stats_type in {"MIN MAX", "MINIMUM MAX", "MIN MAXIMUM", "MINIMUM MAXIMUM"}:
-            stats_type_edit = "MIN_MAX"
-        elif stats_type in {"MINIMUM_MAX", "MIN_MAXIMUM", "MINIMUM_MAXIMUM"}:
-            stats_type_edit = "MIN_MAX"
-        elif stats_type in {"MEAN STD", "MEAN SD", "MEAN S.D.", "MEAN SN", "MEAN SR", "MEAN STDEV", "MEAN STANDARD DEVIATION"}:
-            stats_type_edit = "MEAN_STD"
-        elif stats_type in {"MEAN_SD", "MEAN_S.D.", "MEAN_SN", "MEAN_SR", "MEAN_STDEV", "MEAN_STANDARD_DEVIATION"}:
-            stats_type_edit = "MEAN_STD"
-        elif stats_type in {"MIN MAX MEAN", "MINIMUM MAX MEAN", "MIN MAXIMUM MEAN", "MINIMUM MAXIMUM MEAN"}:
-            stats_type_edit = "MIN_MAX_MEAN"
-        elif stats_type in {"MINIMUM_MAX_MEAN", "MIN_MAXIMUM_MEAN", "MINIMUM_MAXIMUM_MEAN"}:
-            stats_type_edit = "MIN_MAX_MEAN"
         else:
             stats_type_edit = stats_type
         return stats_type_edit
