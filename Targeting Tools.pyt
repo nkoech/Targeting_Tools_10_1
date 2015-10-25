@@ -630,7 +630,7 @@ class LandStatistics(TargetingTool):
         self.parameters[6].parameterDependencies = [self.parameters[3].name]
         self.parameters[6].enabled = False
         self.parameters[7].filter.list = ["Polygon"]  # Geometry type filter
-        self.parameters[9].columns = [['Raster Layer', 'Raster'], ['String', 'Statistics Type'], ['String', 'Ignore NoData'], ['String', 'Output Table Name'], ['String', 'Table Short Name']]
+        self.parameters[9].columns = [['Raster Layer', 'Raster'], ['String', 'Statistics Type'], ['String', 'Ignore NoData'], ['String', 'Output Table Name'], ['String', 'Field Identifier']]
         return self.parameters
 
     def updateParameters(self, parameters):
@@ -713,11 +713,25 @@ class LandStatistics(TargetingTool):
                 self.setFieldWarningMessage(parameters[5], parameters[6], warning_message)
         if parameters[9].value and parameters[9].altered:
             in_val_raster = parameters[9]
+            out_table_char = (" ", "_", "-")
+            table_short_char = ("_")
             for row_count, ras_val_file, stats_type, data_val, out_table_name, table_short_name in self.getStatisticsRasterValue(in_val_raster, table_only=False):
                 self.statisticsTypeErrorMessage(in_val_raster, stats_type)  # Set error message for statistics type
                 if data_val.lower() != "yes":
                     if data_val.lower() != "no":
                         in_val_raster.setErrorMessage("Ignore NoData field expects \"Yes\" or \"No\" input value")
+                for str_char in out_table_name:
+                    self.charValidator(in_val_raster, str_char, out_table_char, field_id=False)  # Validated field value
+                if table_short_name == "#":
+                    in_val_raster.setErrorMessage("Field identifier value is missing")
+                elif len(table_short_name) > 2:
+                    in_val_raster.setErrorMessage("Field identifier field cannot have more than two values")
+                elif table_short_name[0].isdigit():
+                    in_val_raster.setErrorMessage("Field identifier value cannot start with a digit")
+                elif table_short_name.startswith("_"):
+                    in_val_raster.setErrorMessage("Field identifier value cannot start with an  underscore")
+                for str_char in table_short_name:
+                    self.charValidator(in_val_raster, str_char, table_short_char, field_id=True)  # Validated field value
         return
 
     def execute(self, parameters, messages):
@@ -816,6 +830,25 @@ class LandStatistics(TargetingTool):
                               "SD", "SN", "SR", "STDEV", "STANDARD DEVIATION", "STD", "SUM", "VARIETY"}:
             in_val_raster.setErrorMessage("Allowed Statistics type: {0}".format("ALL | MEAN | MAJORITY | MAX | MAXIMUM | MEDIAN | MINIMUM | MIN | MINORITY | "
                                                                                 "RANGE | SUM | VARIETY | STD | SD | SN | SR | STDEV | STANDARD DEVIATION"))
+
+    def charValidator(self, in_val_raster, str_char, esc_char, field_id):
+        """ Validated string character
+            Args:
+                in_val_raster: Input value raster
+                str_char: String character
+                esc_char: Escape characters
+                field_id: Check if field identifier column is to be validated or not
+            Returns: None
+        """
+        # Check for invalid values
+        if str_char.isalnum() is False and str_char not in esc_char:
+            if field_id:
+                if str_char == " ":
+                    in_val_raster.setErrorMessage("Space is not allowed. Use an underscore instead".format(str_char))
+            if str_char == "#":
+                in_val_raster.setErrorMessage("Column value is missing")
+            else:
+                in_val_raster.setErrorMessage("{0} is not a valid character for this field".format(str_char))
 
     def reclassifyRaster(self, parameters, ras_temp_path):
         """ Reclassify input raster
@@ -939,7 +972,7 @@ class LandStatistics(TargetingTool):
             ras_val_file = ras_val_file.replace("\\","/")
             stats_type = lst_val[1]
             data_val = lst_val[2]
-            out_table_name = lst_val[3]
+            out_table_name = lst_val[3].rstrip()
             table_short_name = lst_val[4]
             # Check if data is empty
             if not table_only:
@@ -947,7 +980,7 @@ class LandStatistics(TargetingTool):
                     stats_type = "ALL"
                     data_val = "No"
                     out_table_name = ntpath.basename(ras_val_file)  # Get input raster file name
-                    out_table_name = os.path.splitext(out_table_name)[0]  # Get input raster file name without extension
+                    out_table_name = os.path.splitext(out_table_name)[0].rstrip()  # Get input raster file name without extension
                     yield row_count, ras_val_file, stats_type, data_val, out_table_name, table_short_name
                 else:
                     yield row_count, ras_val_file, stats_type, data_val, out_table_name, table_short_name
