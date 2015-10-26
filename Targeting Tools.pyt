@@ -141,7 +141,7 @@ class LandSuitability(TargetingTool):
 
     def getParameterInfo(self):
         """Define parameter definitions"""
-        self.parameters[0].columns = [['Raster Layer', 'Raster'], ['Double', 'Min Value'], ['Double', 'Max Value'], ['Double', 'Optimal From'], ['Double', 'Optimal To'], ['String', 'Combine-Yes/No']]
+        self.parameters[0].columns = [['Raster Layer', 'Raster'], ['Double', 'Min Value'], ['Double', 'Optimal From'], ['Double', 'Max Value'], ['Double', 'Optimal To'], ['String', 'Combine-Yes/No']]
         return self.parameters
 
     def updateParameters(self, parameters):
@@ -179,31 +179,29 @@ class LandSuitability(TargetingTool):
         """
         # End of value table, now update value table last row with new column data
         if opt_from_val == "#" and opt_to_val == "#" and ras_combine == "#":
-            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, maxVal, "#", "#", "#"))
+            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, "#", maxVal, "#", "#"))
             in_raster.value = vtab.exportToString()
         elif opt_from_val != "#" and opt_to_val == "#" and ras_combine == "#":
-            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, maxVal, opt_from_val, "#", "#"))
+            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, opt_from_val, maxVal, "#", "#"))
             in_raster.value = vtab.exportToString()
         elif opt_from_val == "#" and opt_to_val != "#" and ras_combine == "#":
-            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, maxVal, "#", opt_to_val, "#"))
+            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, "#", maxVal, opt_to_val, "#"))
             in_raster.value = vtab.exportToString()
         elif opt_from_val == "#" and opt_to_val == "#" and ras_combine != "#":
-            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, maxVal, "#", "#", ras_combine))
+            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, "#", maxVal, "#", ras_combine))
             in_raster.value = vtab.exportToString()
         elif opt_from_val != "#" and opt_to_val != "#" and ras_combine == "#":
-            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, maxVal, opt_from_val, opt_to_val, "#"))
+            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, opt_from_val, maxVal, opt_to_val, "#"))
             in_raster.value = vtab.exportToString()
         elif opt_from_val == "#" and opt_to_val != "#" and ras_combine != "#":
-            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, maxVal, "#", opt_to_val, ras_combine))
+            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, "#", maxVal, opt_to_val, ras_combine))
             in_raster.value = vtab.exportToString()
         elif opt_from_val != "#" and opt_to_val == "#" and ras_combine != "#":
-            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, maxVal, opt_from_val, "#", ras_combine))
+            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, opt_from_val, maxVal, "#", ras_combine))
             in_raster.value = vtab.exportToString()
         elif opt_from_val != "#" and opt_to_val != "#" and ras_combine != "#":
-            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine))
+            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, opt_from_val, maxVal, opt_to_val, ras_combine))
             in_raster.value = vtab.exportToString()
-        else:
-            pass
 
     def updateMessages(self, parameters):
         """ Modify the messages created by internal validation for each tool
@@ -526,8 +524,6 @@ class LandSuitability(TargetingTool):
                     in_list[i].pop()  # Remove the last element
                 elif item[0] == "yes":
                     in_list[i].insert(0, "no")  # Insert popped element
-                else:
-                    pass
         return in_list
 
     def getRowValue(self, in_raster, ras_max_min):
@@ -544,8 +540,8 @@ class LandSuitability(TargetingTool):
             ras_file = lst_val[0]  # Get raster file path
             ras_file = ras_file.replace("\\","/")
             minVal = lst_val[1]  # Minimum raster value
-            maxVal = lst_val[2]  # Maximum raster value
-            opt_from_val = lst_val[3]  # Get crop optimum value from
+            opt_from_val = lst_val[2]  # Get crop optimum value from
+            maxVal = lst_val[3]  # Maximum raster value
             opt_to_val = lst_val[4]  # Get crop optimum value to
             ras_combine = lst_val[5]  # Get combine option
             if ras_max_min:
