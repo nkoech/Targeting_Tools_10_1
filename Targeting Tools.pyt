@@ -61,20 +61,22 @@ class TargetingTool(object):
             sys.exit()
         return spatialAnalystCheckedOut
 
-    def setSpatialError(self, in_ras_ref, other_ref, tool_para, warning_msg):
+    def setSpatialWarning(self, in_ras_ref, other_ref, tool_para, warning_msg, new_in_ras, prev_in_ras):
         """ Sets spatial error message
             Args:
                 in_ras_ref: Input data spatial reference
                 other_ref: Other input data spatial reference
                 tool_para: Tool parameter that will receive the warning
                 warnign_msg: Spatial reference warning message
+                new_in_ras: Other input data
+                prev_in_ras: Input data itself
             Return: None
         """
         if in_ras_ref.Type != other_ref.Type:  # Check difference in spatial reference type
-            tool_para.setWarningMessage(warning_msg)
+            tool_para.setWarningMessage(warning_msg.format(new_in_ras, prev_in_ras))
         elif in_ras_ref.Type != "Geographic":
             if in_ras_ref.PCSCode != other_ref.PCSCode:  # Check projection code
-                tool_para.setWarningMessage(warning_msg)
+                tool_para.setWarningMessage(warning_msg.format(new_in_ras, prev_in_ras))
 
     def getInputFc(self, parameter):
         """ Gets the input MXD
@@ -211,6 +213,7 @@ class LandSuitability(TargetingTool):
             Returns: Internal validation messages.
         """
         if parameters[0].value:
+            prev_input = ""
             if parameters[0].altered:
                 in_raster = parameters[0]
                 num_rows = len(in_raster.values)  # The number of rows in the table
@@ -224,8 +227,8 @@ class LandSuitability(TargetingTool):
                     if i == num_rows:
                         last_spataial_ref = arcpy.Describe(ras_file).SpatialReference   # Get spatial reference
                         for ref in ras_ref:
-                            warning_msg = "Raster data not in the  spatial reference"
-                            super(LandSuitability, self).setSpatialError(last_spataial_ref, ref, in_raster, warning_msg)
+                            warning_msg = "{0} spatial reference is different from the input {1}"
+                            super(LandSuitability, self).setSpatialWarning(last_spataial_ref, ref, in_raster, warning_msg, ras_file, prev_input)
                     else:
                         spatial_ref = arcpy.Describe(ras_file).SpatialReference  # Get spatial reference of rasters in value table
                         ras_ref.append(spatial_ref)
@@ -261,8 +264,8 @@ class LandSuitability(TargetingTool):
                     in_fc_param = parameters[1]
                     in_fc = parameters[1].valueAsText.replace("\\","/")
                     in_fc_spataial_ref = arcpy.Describe(in_fc).SpatialReference
-                    warning_msg = "Output extent data spatial reference does not match with input raster"
-                    super(LandSuitability, self).setSpatialError(in_fc_spataial_ref, ras_ref[-1], in_fc_param, warning_msg)
+                    warning_msg = "{0} spatial reference is different from the input {1}"
+                    super(LandSuitability, self).setSpatialWarning(in_fc_spataial_ref, ras_ref[-1], in_fc_param, warning_msg, in_fc, prev_input)
             # Set ESRI grid output file size error
             if parameters[2].value:
                 if parameters[2].altered:
@@ -586,21 +589,6 @@ class LandSuitability(TargetingTool):
             out_fc = out_fc + ".shp"
         return arcpy.mapping.Layer(out_fc)
 
-    def setSpatialError(self, in_spatial_ref, ref, in_data, warning_msg):
-        """ Sets spatial error message
-            Args:
-                in_spatial_ref: Input data spatial reference
-                ref: Input raster spatial reference
-                in_data: Input data - raster and feature class
-                warnign_msg: Spatial reference warning message
-            Return: None
-        """
-        if in_spatial_ref.Type != ref.Type:  # Check difference in spatial reference type
-            in_data.setWarningMessage(warning_msg)
-        elif in_spatial_ref.Type != "Geographic":
-            if in_spatial_ref.PCSCode != ref.PCSCode:  # Check projection code
-                in_data.setWarningMessage(warning_msg)
-
 
 class LandStatistics(TargetingTool):
     def __init__(self):
@@ -701,6 +689,11 @@ class LandStatistics(TargetingTool):
                 parameters: Parameters from the tool.
             Returns: Internal validation messages.
         """
+        in_raster = ""
+        in_ras_ref = ""
+        if parameters[0].value and parameters[0].altered:
+            in_raster = parameters[0].valueAsText.replace("\\", "/")
+            in_ras_ref = arcpy.Describe(in_raster).SpatialReference  # Get spatial reference of input raster
         if parameters[1].value == "EQUAL INTERVAL" and parameters[2].enabled:
             if parameters[2].value <= 0:
                 parameters[2].setErrorMessage("Class value should be greater than 0")
@@ -722,8 +715,14 @@ class LandStatistics(TargetingTool):
             if parameters[5].value and parameters[6].value:
                 warning_message = 'This field is similar to "To value field"'
                 self.setFieldWarningMessage(parameters[5], parameters[6], warning_message)
+        if parameters[7].value and parameters[7].altered:
+            if parameters[0].value and parameters[0].altered:
+                in_fc_para = parameters[7]
+                in_fc = parameters[7].valueAsText.replace("\\", "/")
+                in_fc_ref = arcpy.Describe(in_fc).SpatialReference  # Get spatial reference of input value raster
+                warning_msg = "{0} spatial reference is different from the input {1}"
+                super(LandStatistics, self).setSpatialWarning(in_ras_ref, in_fc_ref, in_fc_para, warning_msg, in_fc, in_raster)  # Set spatial reference warning
         if parameters[9].value and parameters[9].altered:
-            in_raster = parameters[0].valueAsText.replace("\\", "/")
             in_val_raster = parameters[9]
             out_table_char = (" ", "_", "-")
             table_short_char = ("_")
@@ -739,11 +738,11 @@ class LandStatistics(TargetingTool):
                     prev_ras_val.append(ras_val_file)
                 else:
                     prev_ras_val.append(ras_val_file)
+                # Set spatial reference warning
                 if parameters[0].value and parameters[0].altered:
-                    in_ras_ref = arcpy.Describe(in_raster).SpatialReference  # Get spatial reference of input raster
                     ras_val_ref = arcpy.Describe(ras_val_file).SpatialReference  # Get spatial reference of input value raster
-
-
+                    warning_msg = "{0} spatial reference is different from the input {1}"
+                    super(LandStatistics, self).setSpatialWarning(in_ras_ref, ras_val_ref, in_val_raster, warning_msg, ras_val_file, in_raster)  # Set spatial reference warning
                 self.statisticsTypeErrorMessage(in_val_raster, stats_type)  # Set error message for statistics type
                 # Ignore NoData validation
                 if data_val.lower() != "yes":
