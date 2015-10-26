@@ -45,7 +45,6 @@ class Toolbox(object):
         """Define the toolbox (the name of the toolbox is the name of the .pyt file)."""
         self.label = "Targeting Tools"
         self.alias = "Target Tools"
-        self.canRunInBackground = False
         # List of tool classes associated with this toolbox
         self.tools = [LandSuitability, LandStatistics]
 
@@ -78,6 +77,22 @@ class TargetingTool(object):
         elif in_ras_ref.Type != "Geographic":
             if in_ras_ref.PCSCode != other_ref.PCSCode:  # Check projection code
                 tool_para.setWarningMessage(warning_msg.format(new_in_ras, prev_in_ras))
+
+    def uniqueValueValidator(self, prev_val, str_val, tool_para, field_id):
+        """ Check for duplicates
+            Args:
+                prev_val: Prev values as list
+                str_val: Input string value
+                tool_para: Tool parameter that will receive the warning
+                field_id: Availability of field identifier
+            Returns: None
+        """
+        for item in prev_val:
+            if str_val == item:
+                if field_id:
+                    tool_para.setErrorMessage("{0} is a duplicate of {1}. This is not allowed".format(str_val, item))
+                else:
+                    tool_para.setWarningMessage("{0} file is a duplicate of {1}".format(str_val, item))
 
     def getInputFc(self, parameter):
         """ Gets the input MXD
@@ -133,7 +148,7 @@ class LandSuitability(TargetingTool):
         """Define the tool (tool name is the name of the class)."""
         self.label = "Land Suitability"
         self.description = ""
-        self.canRunInBackground = False
+        self.canRunInBackground = True
         self.parameters = [
             parameter("Input raster", "in_raster", "Value Table"),
             parameter("Output extent", "out_extent", "Feature Layer", parameterType='Optional'),
@@ -217,6 +232,7 @@ class LandSuitability(TargetingTool):
                 in_raster = parameters[0]
                 num_rows = len(in_raster.values)  # The number of rows in the table
                 ras_max_min = True
+                prev_ras_val = []
                 ras_ref = []
                 i = 0
                 # Get values from the generator function to show update messages
@@ -231,6 +247,12 @@ class LandSuitability(TargetingTool):
                     else:
                         spatial_ref = arcpy.Describe(ras_file).SpatialReference  # Get spatial reference of rasters in value table
                         ras_ref.append(spatial_ref)
+                    # Set input raster duplicate warning
+                    if len(prev_ras_val) > 0:
+                        super(LandSuitability, self).uniqueValueValidator(prev_ras_val, ras_file, in_raster, field_id=False)  # Set duplicate input warning
+                        prev_ras_val.append(ras_file)
+                    else:
+                        prev_ras_val.append(ras_file)
                     # Set errors for other value table variables
                     if opt_from_val == "#":
                         in_raster.setErrorMessage("Crop \"Optimal From\" value is missing")
@@ -751,7 +773,7 @@ class LandStatistics(TargetingTool):
                     self.charValidator(in_val_raster, str_char, out_table_char, field_id=False)  # Validated field value
                 # Input raster value validation
                 if len(prev_ras_val) > 0:
-                    self.uniqueValueValidator(prev_ras_val, ras_val_file, in_val_raster, field_id=False)
+                    super(LandStatistics, self).uniqueValueValidator(prev_ras_val, ras_val_file, in_val_raster, field_id=False)  # Set duplicate input warning
                     prev_ras_val.append(ras_val_file)
                 else:
                     prev_ras_val.append(ras_val_file)
@@ -775,7 +797,7 @@ class LandStatistics(TargetingTool):
                 for str_char in table_short_name:
                     self.charValidator(in_val_raster, str_char, table_short_char, field_id=True)  # Validated field value
                 if len(prev_table_short_val) > 0:
-                    self.uniqueValueValidator(prev_table_short_val, table_short_name, in_val_raster, field_id=True)
+                    super(LandStatistics, self).uniqueValueValidator(prev_table_short_val, table_short_name, in_val_raster, field_id=True)
                     prev_table_short_val.append(table_short_name)
                 else:
                     prev_table_short_val.append(table_short_name)
@@ -877,22 +899,6 @@ class LandStatistics(TargetingTool):
                               "SD", "SN", "SR", "STDEV", "STANDARD DEVIATION", "STD", "SUM", "VARIETY"}:
             in_val_raster.setErrorMessage("Allowed Statistics type: {0}".format("ALL | MEAN | MAJORITY | MAX | MAXIMUM | MEDIAN | MINIMUM | MIN | MINORITY | "
                                                                                 "RANGE | SUM | VARIETY | STD | SD | SN | SR | STDEV | STANDARD DEVIATION"))
-
-    def uniqueValueValidator(self, prev_val, str_val, in_val_raster, field_id):
-        """ Check for duplicates
-            Args:
-                prev_val: Prev values as list
-                str_val: Table field identifier
-                in_val_raster: Input value raster
-                field_id: Availability of field identifier
-            Returns: None
-        """
-        for item in prev_val:
-            if str_val == item:
-                if field_id:
-                    in_val_raster.setErrorMessage("{0} is a duplicate of {1}. This is not allowed".format(str_val, item))
-                else:
-                    in_val_raster.setWarningMessage("{0} file is a duplicate of {1}".format(str_val, item))
 
     def charValidator(self, in_val_raster, str_char, esc_char, field_id):
         """ Validated string character
