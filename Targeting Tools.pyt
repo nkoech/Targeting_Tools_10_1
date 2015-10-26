@@ -20,6 +20,7 @@
 import os
 import sys
 import re
+import time
 import arcpy
 import shutil
 import ntpath
@@ -296,7 +297,6 @@ class LandSuitability(TargetingTool):
             # Raster minus operation
             if parameters[1].value:
                 in_fc = super(LandSuitability, self).getInputFc(parameters[1])["in_fc"]
-                #in_fc = self.getInputFc(parameters)["in_fc"]
                 extent = arcpy.Describe(in_fc).extent # Get feature class extent
                 self.rasterMinusInit(in_raster, ras_max_min, ras_temp_path, in_fc, extent)  # Minus init operation
             else:
@@ -354,6 +354,8 @@ class LandSuitability(TargetingTool):
             arcpy.AddMessage("Saving suitability output\n")
             out_ras_temp.save(out_ras)
             arcpy.AddMessage("Suitability output saved!\n")
+            arcpy.AddMessage("Creating data input log\n")
+            self.createParametersLog(out_ras, ras_max_min, in_raster)  # create parameters log file
             arcpy.AddMessage("Deleting temporary folder\n")
             shutil.rmtree(ras_temp_path)
             self.loadOutput(parameters, out_ras)  # Load output to current MXD
@@ -559,6 +561,25 @@ class LandSuitability(TargetingTool):
                         yield ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine, row_count
             else:
                 yield ras_combine
+
+    def createParametersLog(self, out_ras, ras_max_min, in_raster):
+        """ Loads output to the current MXD
+            Args:
+                out_ras: Land suitability layer file path
+                ras_max_min: A parameter that determines whether minimum and maximum value should be calculated or not.
+                in_raster: Value table parameter with rows accompanied by columns.
+            Return: None
+        """
+        out_ras_path = ntpath.dirname(out_ras)  # Get path without file name
+        out_log_txt = out_ras_path + "/data_log.txt"
+        t = time.localtime()
+        local_time = time.asctime(t)
+        with open(out_log_txt, "w") as f:
+            f.write(local_time + " Tool Inputs\n")
+            f.write("\n")
+            for ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine, row_count in self.getRowValue(in_raster, ras_max_min):
+                new_line = str(row_count) + ": " + ras_file + " ; " + minVal + " ; " + opt_from_val + " ; " + maxVal + " ; " + opt_to_val + " ; " + ras_combine
+                f.write(new_line + "\n")
 
     def loadOutput(self, parameters, out_ras):
         """ Loads output to the current MXD
