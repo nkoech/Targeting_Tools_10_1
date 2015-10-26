@@ -61,6 +61,21 @@ class TargetingTool(object):
             sys.exit()
         return spatialAnalystCheckedOut
 
+    def setSpatialError(self, in_ras_ref, other_ref, tool_para, warning_msg):
+        """ Sets spatial error message
+            Args:
+                in_ras_ref: Input data spatial reference
+                other_ref: Other input data spatial reference
+                tool_para: Tool parameter that will receive the warning
+                warnign_msg: Spatial reference warning message
+            Return: None
+        """
+        if in_ras_ref.Type != other_ref.Type:  # Check difference in spatial reference type
+            tool_para.setWarningMessage(warning_msg)
+        elif in_ras_ref.Type != "Geographic":
+            if in_ras_ref.PCSCode != other_ref.PCSCode:  # Check projection code
+                tool_para.setWarningMessage(warning_msg)
+
     def getInputFc(self, parameter):
         """ Gets the input MXD
             Args:
@@ -210,7 +225,7 @@ class LandSuitability(TargetingTool):
                         last_spataial_ref = arcpy.Describe(ras_file).SpatialReference   # Get spatial reference
                         for ref in ras_ref:
                             warning_msg = "Raster data not in the  spatial reference"
-                            self.setSpatialError(last_spataial_ref, ref, in_raster, warning_msg)
+                            super(LandSuitability, self).setSpatialError(last_spataial_ref, ref, in_raster, warning_msg)
                     else:
                         spatial_ref = arcpy.Describe(ras_file).SpatialReference  # Get spatial reference of rasters in value table
                         ras_ref.append(spatial_ref)
@@ -247,7 +262,7 @@ class LandSuitability(TargetingTool):
                     in_fc = parameters[1].valueAsText.replace("\\","/")
                     in_fc_spataial_ref = arcpy.Describe(in_fc).SpatialReference
                     warning_msg = "Output extent data spatial reference does not match with input raster"
-                    self.setSpatialError(in_fc_spataial_ref, ras_ref[-1], in_fc_param, warning_msg)
+                    super(LandSuitability, self).setSpatialError(in_fc_spataial_ref, ras_ref[-1], in_fc_param, warning_msg)
             # Set ESRI grid output file size error
             if parameters[2].value:
                 if parameters[2].altered:
@@ -585,8 +600,6 @@ class LandSuitability(TargetingTool):
         elif in_spatial_ref.Type != "Geographic":
             if in_spatial_ref.PCSCode != ref.PCSCode:  # Check projection code
                 in_data.setWarningMessage(warning_msg)
-        else:
-            pass
 
 
 class LandStatistics(TargetingTool):
@@ -710,29 +723,32 @@ class LandStatistics(TargetingTool):
                 warning_message = 'This field is similar to "To value field"'
                 self.setFieldWarningMessage(parameters[5], parameters[6], warning_message)
         if parameters[9].value and parameters[9].altered:
+            in_raster = parameters[0].valueAsText.replace("\\", "/")
             in_val_raster = parameters[9]
             out_table_char = (" ", "_", "-")
             table_short_char = ("_")
             prev_ras_val = []
             prev_table_short_val = []
             for row_count, ras_val_file, stats_type, data_val, out_table_name, table_short_name in self.getStatisticsRasterValue(in_val_raster, table_only=False):
-                self.statisticsTypeErrorMessage(in_val_raster, stats_type)  # Set error message for statistics type
+                # Table name validation
+                for str_char in out_table_name:
+                    self.charValidator(in_val_raster, str_char, out_table_char, field_id=False)  # Validated field value
                 # Input raster value validation
                 if len(prev_ras_val) > 0:
                     self.uniqueValueValidator(prev_ras_val, ras_val_file, in_val_raster, field_id=False)
-                    """for item in prev_ras_val:
-                        if ras_val_file == item:
-                            in_val_raster.setWarningMessage("{0} file is a duplicate of {1}".format(ras_val_file, item))"""
                     prev_ras_val.append(ras_val_file)
                 else:
                     prev_ras_val.append(ras_val_file)
+                if parameters[0].value and parameters[0].altered:
+                    in_ras_ref = arcpy.Describe(in_raster).SpatialReference  # Get spatial reference of input raster
+                    ras_val_ref = arcpy.Describe(ras_val_file).SpatialReference  # Get spatial reference of input value raster
+
+
+                self.statisticsTypeErrorMessage(in_val_raster, stats_type)  # Set error message for statistics type
                 # Ignore NoData validation
                 if data_val.lower() != "yes":
                     if data_val.lower() != "no":
                         in_val_raster.setErrorMessage("Ignore NoData field expects \"Yes\" or \"No\" input value")
-                # Table name validation
-                for str_char in out_table_name:
-                    self.charValidator(in_val_raster, str_char, out_table_char, field_id=False)  # Validated field value
                 # Field identifier validation
                 if len(table_short_name) > 2:
                     in_val_raster.setErrorMessage("Field identifier field cannot have more than two values")
