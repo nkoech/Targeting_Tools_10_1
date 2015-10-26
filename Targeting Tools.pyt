@@ -240,8 +240,6 @@ class LandSuitability(TargetingTool):
                         in_raster.setErrorMessage("The first \"Combine\" value should ONLY be \"No\"")
                     elif num_rows == 1:
                         in_raster.setWarningMessage("One raster in place. Two are recommended")
-                    else:
-                        pass
             # Set feature class spatial reference errors
             if parameters[1].value:
                 if parameters[1].altered:
@@ -715,16 +713,28 @@ class LandStatistics(TargetingTool):
             in_val_raster = parameters[9]
             out_table_char = (" ", "_", "-")
             table_short_char = ("_")
+            prev_ras_val = []
+            prev_table_short_val = []
             for row_count, ras_val_file, stats_type, data_val, out_table_name, table_short_name in self.getStatisticsRasterValue(in_val_raster, table_only=False):
                 self.statisticsTypeErrorMessage(in_val_raster, stats_type)  # Set error message for statistics type
+                # Input raster value validation
+                if len(prev_ras_val) > 0:
+                    self.uniqueValueValidator(prev_ras_val, ras_val_file, in_val_raster, field_id=False)
+                    """for item in prev_ras_val:
+                        if ras_val_file == item:
+                            in_val_raster.setWarningMessage("{0} file is a duplicate of {1}".format(ras_val_file, item))"""
+                    prev_ras_val.append(ras_val_file)
+                else:
+                    prev_ras_val.append(ras_val_file)
+                # Ignore NoData validation
                 if data_val.lower() != "yes":
                     if data_val.lower() != "no":
                         in_val_raster.setErrorMessage("Ignore NoData field expects \"Yes\" or \"No\" input value")
+                # Table name validation
                 for str_char in out_table_name:
                     self.charValidator(in_val_raster, str_char, out_table_char, field_id=False)  # Validated field value
-                if table_short_name == "#":
-                    in_val_raster.setErrorMessage("Field identifier value is missing")
-                elif len(table_short_name) > 2:
+                # Field identifier validation
+                if len(table_short_name) > 2:
                     in_val_raster.setErrorMessage("Field identifier field cannot have more than two values")
                 elif table_short_name[0].isdigit():
                     in_val_raster.setErrorMessage("Field identifier value cannot start with a digit")
@@ -732,6 +742,11 @@ class LandStatistics(TargetingTool):
                     in_val_raster.setErrorMessage("Field identifier value cannot start with an  underscore")
                 for str_char in table_short_name:
                     self.charValidator(in_val_raster, str_char, table_short_char, field_id=True)  # Validated field value
+                if len(prev_table_short_val) > 0:
+                    self.uniqueValueValidator(prev_table_short_val, table_short_name, in_val_raster, field_id=True)
+                    prev_table_short_val.append(table_short_name)
+                else:
+                    prev_table_short_val.append(table_short_name)
         return
 
     def execute(self, parameters, messages):
@@ -830,6 +845,22 @@ class LandStatistics(TargetingTool):
                               "SD", "SN", "SR", "STDEV", "STANDARD DEVIATION", "STD", "SUM", "VARIETY"}:
             in_val_raster.setErrorMessage("Allowed Statistics type: {0}".format("ALL | MEAN | MAJORITY | MAX | MAXIMUM | MEDIAN | MINIMUM | MIN | MINORITY | "
                                                                                 "RANGE | SUM | VARIETY | STD | SD | SN | SR | STDEV | STANDARD DEVIATION"))
+
+    def uniqueValueValidator(self, prev_val, str_val, in_val_raster, field_id):
+        """ Check for duplicates
+            Args:
+                prev_val: Prev values as list
+                str_val: Table field identifier
+                in_val_raster: Input value raster
+                field_id: Availability of field identifier
+            Returns: None
+        """
+        for item in prev_val:
+            if str_val == item:
+                if field_id:
+                    in_val_raster.setErrorMessage("{0} is a duplicate of {1}. This is not allowed".format(str_val, item))
+                else:
+                    in_val_raster.setWarningMessage("{0} file is a duplicate of {1}".format(str_val, item))
 
     def charValidator(self, in_val_raster, str_char, esc_char, field_id):
         """ Validated string character
