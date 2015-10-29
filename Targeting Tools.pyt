@@ -5,11 +5,10 @@
                 Commonwealth Scientific and Industrial Research Organisation - CSIRO
 
     Notes:      Tool-1: Identify land suitable to cultivate a certain crop.
-                Tool-2: Identify areas that have similar biophysical characteristics to
+                Tool-2: Calculate statistics from the land suitability output raster
+                        and return the result in a dbf file format.
+                Tool-3: Identify areas that have similar biophysical characteristics to
                         the location currently under a certain type crop.
-                Tool-3: Calculate statistics from the land suitability output raster
-                        and return the result in a CSV file format.
-
                 Fully tested in ArcGIS 10.1.
                 Requires Spatial Analyst extension
 
@@ -17,13 +16,7 @@
     Modified:   September 2015
 """
 
-import os
-import sys
-import re
-import time
-import arcpy
-import shutil
-import ntpath
+import os, sys, re, time, arcpy, shutil, ntpath
 from itertools import *
 
 arcpy.env.overwriteOutput = True
@@ -90,7 +83,10 @@ class TargetingTool(object):
         for item in prev_val:
             if str_val == item:
                 if field_id:
-                    tool_para.setErrorMessage("{0} is a duplicate of {1}. This is not allowed".format(str_val, item))
+                    if str_val != "#":
+                        tool_para.setErrorMessage("{0} is a duplicate of {1}. This is not allowed".format(str_val, item))
+                    else:
+                        tool_para.setErrorMessage("Column value is missing")
                 else:
                     tool_para.setWarningMessage("{0} file is a duplicate of {1}".format(str_val, item))
 
@@ -645,13 +641,9 @@ class LandStatistics(TargetingTool):
             parameter("To value field", "to_val_field", "Field", parameterType='Optional'),
             parameter("New value field", "new_val_field", "Field", parameterType='Optional'),
             parameter("Input feature zone data", "in_fczone", "Feature Layer", parameterType='Optional'),
-            #parameter("Feature name field", "fval_field", "Field", parameterType="Optional"),
             parameter("Feature name field", "fval_field", "String", parameterType="Optional"),
-            #parameter("Input value raster", "in_val_ras", "Raster Layer"),
             parameter("Input value raster", "in_val_ras", "Value Table"),
-            parameter("Output Folder", "out_table", "Folder", direction="Output"),
-            #parameter("Ignore NoData in calculations", "nodata_calc", "Boolean", parameterType='Optional'),
-            #parameter("Statistics type", "stat_type", "String", parameterType="Optional")
+            parameter("Output Folder", "out_table", "Workspace", direction="input")
         ]
 
     def getParameterInfo(self):
@@ -718,7 +710,7 @@ class LandStatistics(TargetingTool):
                         out_table_name = "'" + out_table_name + "'"
                     if " " in stats_type:
                         stats_type = "'" + stats_type + "'"
-                    self.updateValueTableInput(in_val_raster, ras_val_file, stats_type, data_val, out_table_name, table_short_name, vtab)
+                    self.updateValueTableInput(parameters, in_val_raster, ras_val_file, stats_type, data_val, out_table_name, table_short_name, vtab)
         return
 
     def updateMessages(self, parameters):
@@ -788,19 +780,13 @@ class LandStatistics(TargetingTool):
                     if data_val.lower() != "no":
                         in_val_raster.setErrorMessage("Ignore NoData field expects \"Yes\" or \"No\" input value")
                 # Field identifier validation
-                if len(table_short_name) > 2:
-                    in_val_raster.setErrorMessage("Field identifier field cannot have more than two values")
-                elif table_short_name[0].isdigit():
-                    in_val_raster.setErrorMessage("Field identifier value cannot start with a digit")
-                elif table_short_name.startswith("_"):
-                    in_val_raster.setErrorMessage("Field identifier value cannot start with an  underscore")
-                for str_char in table_short_name:
-                    self.charValidator(in_val_raster, str_char, table_short_char, field_id=True)  # Validated field value
-                if len(prev_table_short_val) > 0:
-                    super(LandStatistics, self).uniqueValueValidator(prev_table_short_val, table_short_name, in_val_raster, field_id=True)
-                    prev_table_short_val.append(table_short_name)
-                else:
-                    prev_table_short_val.append(table_short_name)
+                if len(in_val_raster.valueAsText.split(";")) > 1:
+                    self.fielIdValidator(table_short_name, in_val_raster, table_short_char)  # Value table field identifier validator
+                    if len(prev_table_short_val) > 0:
+                        super(LandStatistics, self).uniqueValueValidator(prev_table_short_val, table_short_name, in_val_raster, field_id=True)
+                        prev_table_short_val.append(table_short_name)
+                    else:
+                        prev_table_short_val.append(table_short_name)
         return
 
     def execute(self, parameters, messages):
@@ -857,9 +843,10 @@ class LandStatistics(TargetingTool):
                 else:
                     parameters[i].enabled = True
 
-    def updateValueTableInput(self, in_val_raster, ras_val_file, stats_type, data_val, out_table_name, table_short_name, vtab):
+    def updateValueTableInput(self, parameters, in_val_raster, ras_val_file, stats_type, data_val, out_table_name, table_short_name, vtab):
         """ Update value parameters in the tool.
             Args:
+                parameters: Tool parameters
                 in_val_raster: Input value raster parameter
                 ras_val_file: Input value raster
                 stats_type: Statistic type to be calculated
@@ -899,6 +886,23 @@ class LandStatistics(TargetingTool):
                               "SD", "SN", "SR", "STDEV", "STANDARD DEVIATION", "STD", "SUM", "VARIETY"}:
             in_val_raster.setErrorMessage("Allowed Statistics type: {0}".format("ALL | MEAN | MAJORITY | MAX | MAXIMUM | MEDIAN | MINIMUM | MIN | MINORITY | "
                                                                                 "RANGE | SUM | VARIETY | STD | SD | SN | SR | STDEV | STANDARD DEVIATION"))
+
+    def fielIdValidator(self, table_short_name, in_val_raster, table_short_char):
+        """ Value table field identifier validator
+            Args:
+                table_short_name: Value table field identifier column value
+                in_val_raster: Input value raster
+                table_short_char: esc_char: Escape characters
+            Returns: None
+        """
+        if len(table_short_name) > 2:
+            in_val_raster.setErrorMessage("Field identifier field cannot have more than two values")
+        elif table_short_name[0].isdigit():
+            in_val_raster.setErrorMessage("Field identifier value cannot start with a digit")
+        elif table_short_name.startswith("_"):
+            in_val_raster.setErrorMessage("Field identifier value cannot start with an  underscore")
+        for str_char in table_short_name:
+            self.charValidator(in_val_raster, str_char, table_short_char, field_id=True)  # Validated field value
 
     def charValidator(self, in_val_raster, str_char, esc_char, field_id):
         """ Validated string character
@@ -1161,12 +1165,14 @@ class LandStatistics(TargetingTool):
         for field in fields:
             if field.name in {"AREA", "MIN", "MAX", "RANGE", "MEAN", "STD", "SUM", "VARIETY", "MAJORITY", "MINORITY", "MEDIAN"}:
                 fieldinfo.addField(field.name, table_short_name + "_" + field.name, "VISIBLE", "")
-        out_table_view = out_table_name + "_view"
+        view_table = out_table_name + "_view"
         # Create a view layer in memory with fields as set in fieldinfo object
-        arcpy.MakeTableView_management(out_stat_table, out_table_view, "", "", fieldinfo)
+        arcpy.MakeTableView_management(out_stat_table, view_table, "", "", fieldinfo)
         # make a copy of the view in disk
-        arcpy.CopyRows_management(out_table_view, ras_temp_path + out_table_view + ".dbf")
-        out_table_view = ras_temp_path + out_table_view + ".dbf"
+        arcpy.CopyRows_management(view_table, ras_temp_path + view_table + ".dbf")
+        out_table_view = ras_temp_path + view_table + ".dbf"
+        if arcpy.Exists(view_table):
+            arcpy.Delete_management(view_table)  # delete view if it exists
         return out_table_view
 
     def moveFile(self, current_path, new_path):
@@ -1229,18 +1235,17 @@ class LandStatistics(TargetingTool):
                 ras_temp_path: Temporary folder
                 out_stat_table: Output zonal statistics table
         """
-
         with arcpy.da.SearchCursor(ras_poly, ["VALUE"]) as cursor:
             for row in cursor:
                 sql_exp1 = "VALUE = " + str(row[0])  # SQL expression
                 sql_exp2 = "POLY_VAL = " + str(row[0])
-                cursor2 = arcpy.da.SearchCursor(ras_poly, ["ADM2_NAME"], sql_exp1)
-                for row2 in cursor2:
-                    update_val = row2[0]
-                    with arcpy.da.UpdateCursor(out_stat_table, ["ADM2_NAME"], sql_exp2) as cursor3:  # Update values in the second table
-                        for row3 in cursor3:
-                            row3[0] = update_val
-                            cursor3.updateRow(row3)
+                with arcpy.da.SearchCursor(ras_poly, ["ADM2_NAME"], sql_exp1) as cursor2:
+                    for row2 in cursor2:
+                        update_val = row2[0]
+                        with arcpy.da.UpdateCursor(out_stat_table, ["ADM2_NAME"], sql_exp2) as cursor3:  # Update values in the second table
+                            for row3 in cursor3:
+                                row3[0] = update_val
+                                cursor3.updateRow(row3)
 
         arcpy.DeleteField_management(out_stat_table, "POLY_VAL")  # Process: Delete Field
         arcpy.management.Delete(ras_poly)  # Delete polygon
