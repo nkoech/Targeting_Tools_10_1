@@ -166,6 +166,19 @@ class TargetingTool(object):
             in_str = in_str.rstrip("'")
         return in_str
 
+    def setFileNameLenError(self, out_ras_param):
+        """ Set ESRI GRID file name length error
+            Args:
+                out_ras_param: Out file parameter
+            Return: None
+        """
+        if out_ras_param.value and out_ras_param.altered:
+            out_ras = out_ras_param.valueAsText.replace("\\", "/")
+            out_ras_file, out_ras_file_ext = os.path.splitext(out_ras)
+            if out_ras_file_ext != ".tif":
+                if len(ntpath.basename(out_ras)) > 13:
+                    out_ras_param.setErrorMessage("Output raster: The length of the grid base name in {0} is longer than 13.".format(out_ras.replace("/", "\\")))
+
 
 class LandSuitability(TargetingTool):
     def __init__(self):
@@ -307,13 +320,7 @@ class LandSuitability(TargetingTool):
             # Set feature class spatial reference errors
             if parameters[1].value and parameters[1].altered:
                 super(LandSuitability, self).setFcSpatialWarning(parameters[1], all_ras_ref[-1], prev_input)  # Set feature class spatial warning
-            # Set ESRI grid output file size error
-            if parameters[2].value and parameters[2].altered:
-                out_ras = parameters[2].valueAsText.replace("\\", "/")
-                out_ras_file, out_ras_file_ext = os.path.splitext(out_ras)
-                if out_ras_file_ext != ".tif":
-                    if len(ntpath.basename(out_ras)) > 13:
-                        parameters[2].setErrorMessage("Output raster: The length of the grid base name in {0} is longer than 13.".format(out_ras.replace("/", "\\")))
+        super(LandSuitability, self).setFileNameLenError(parameters[2])  # Set ESRI grid output file size error
         return
 
     def execute(self, parameters, messages):
@@ -1285,8 +1292,8 @@ class LandSimilarity(TargetingTool):
             parameter("Input point layer", "in_point", "Feature Layer"),
             parameter("Output extent", "out_extent", "Feature Layer", parameterType='Optional'),
             parameter("R executable", "r_exe", "File"),
-            parameter("Output Mahalanobis raster", "out_raster", 'Raster Layer', direction='Output'),
-            parameter("Output MESS raster", "out_raster", 'Raster Layer', direction='Output')
+            parameter("Output Mahalanobis raster", "out_raster_mnobis", 'Raster Layer', direction='Output'),
+            parameter("Output MESS raster", "out_raster_mess", 'Raster Layer', direction='Output')
         ]
 
     def getParameterInfo(self):
@@ -1346,6 +1353,12 @@ class LandSimilarity(TargetingTool):
                 super(LandSimilarity, self).setFcSpatialWarning(parameters[1], all_ras_ref[-1], prev_input)  # Set feature class spatial warning
             if parameters[2].value and parameters[2].altered:
                 super(LandSimilarity, self).setFcSpatialWarning(parameters[2], all_ras_ref[-1], prev_input)
+        if parameters[3].value and parameters[3].altered:
+            r_exe_path = parameters[3].valueAsText
+            if not r_exe_path.endswith(("\\bin\\R.exe", "\\bin\\x64\\R.exe", "\\bin\\i386\\R.exe")):
+                parameters[3].setErrorMessage("{0} is not a valid R executable".format(r_exe_path))
+        super(LandSimilarity, self).setFileNameLenError(parameters[4])  # Set ESRI grid output file size error
+        super(LandSimilarity, self).setFileNameLenError(parameters[5])
         return
 
     def execute(self, parameters, messages):
