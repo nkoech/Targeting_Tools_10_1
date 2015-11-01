@@ -39,7 +39,7 @@ class Toolbox(object):
         self.label = "Targeting Tools"
         self.alias = "Target Tools"
         # List of tool classes associated with this toolbox
-        self.tools = [LandSuitability, LandStatistics]
+        self.tools = [LandSuitability, LandStatistics, LandSimilarity]
 
 
 class TargetingTool(object):
@@ -53,6 +53,19 @@ class TargetingTool(object):
             arcpy.AddMessage('ERROR: At a minimum, this script requires the Spatial Analyst Extension to run \n')
             sys.exit()
         return spatialAnalystCheckedOut
+
+    def setFcSpatialWarning(self, in_parameter, ras_ref, prev_input):
+        """ Sets feature class spatial warning
+            Args:
+                parameter: Feature class input parameter
+                ras_ref: Input raster spatial reference
+            Return: None
+        """
+        in_fc_param = in_parameter
+        in_fc = in_parameter.valueAsText.replace("\\", "/")
+        in_fc_spataial_ref = arcpy.Describe(in_fc).SpatialReference
+        warning_msg = "{0} zxzxzxspatial reference is different from the input {1}"
+        self.setSpatialWarning(in_fc_spataial_ref, ras_ref, in_fc_param, warning_msg, in_fc, prev_input)
 
     def setSpatialWarning(self, in_ras_ref, other_ref, tool_para, warning_msg, new_in_ras, prev_in_ras):
         """ Sets spatial error message
@@ -224,16 +237,26 @@ class LandSuitability(TargetingTool):
         """
         if parameters[0].value:
             prev_input = ""
+            ras_ref = []
+            all_ras_ref = []
+            in_raster = parameters[0]
             if parameters[0].altered:
-                in_raster = parameters[0]
                 num_rows = len(in_raster.values)  # The number of rows in the table
                 ras_max_min = True
                 prev_ras_val = []
-                ras_ref = []
                 i = 0
                 # Get values from the generator function to show update messages
                 for ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine, row_count in self.getRowValue(in_raster, ras_max_min):
                     i += 1
+                    # Set input raster duplicate warning
+                    if len(prev_ras_val) > 0:
+                        super(LandSuitability, self).uniqueValueValidator(prev_ras_val, ras_file, in_raster, field_id=False)  # Set duplicate input warning
+                        prev_ras_val.append(ras_file)
+                    else:
+                        prev_ras_val.append(ras_file)
+                    # Get spatial reference for all input raster
+                    spatial_ref = arcpy.Describe(ras_file).SpatialReference
+                    all_ras_ref.append(spatial_ref)
                     # Set raster spatial reference errors
                     if i == num_rows:
                         last_spataial_ref = arcpy.Describe(ras_file).SpatialReference   # Get spatial reference
@@ -243,12 +266,6 @@ class LandSuitability(TargetingTool):
                     else:
                         spatial_ref = arcpy.Describe(ras_file).SpatialReference  # Get spatial reference of rasters in value table
                         ras_ref.append(spatial_ref)
-                    # Set input raster duplicate warning
-                    if len(prev_ras_val) > 0:
-                        super(LandSuitability, self).uniqueValueValidator(prev_ras_val, ras_file, in_raster, field_id=False)  # Set duplicate input warning
-                        prev_ras_val.append(ras_file)
-                    else:
-                        prev_ras_val.append(ras_file)
                     # Set errors for other value table variables
                     if opt_from_val == "#":
                         in_raster.setErrorMessage("Crop \"Optimal From\" value is missing")
@@ -276,21 +293,15 @@ class LandSuitability(TargetingTool):
                     elif num_rows == 1:
                         in_raster.setWarningMessage("One raster in place. Two are recommended")
             # Set feature class spatial reference errors
-            if parameters[1].value:
-                if parameters[1].altered:
-                    in_fc_param = parameters[1]
-                    in_fc = parameters[1].valueAsText.replace("\\","/")
-                    in_fc_spataial_ref = arcpy.Describe(in_fc).SpatialReference
-                    warning_msg = "{0} spatial reference is different from the input {1}"
-                    super(LandSuitability, self).setSpatialWarning(in_fc_spataial_ref, ras_ref[-1], in_fc_param, warning_msg, in_fc, prev_input)
+            if parameters[1].value and parameters[1].altered:
+                super(LandSuitability, self).setFcSpatialWarning(parameters[1], all_ras_ref[-1], prev_input)  # Set feature class spatial warning
             # Set ESRI grid output file size error
-            if parameters[2].value:
-                if parameters[2].altered:
-                    out_ras = parameters[2].valueAsText.replace("\\", "/")
-                    out_ras_file, out_ras_file_ext = os.path.splitext(out_ras)
-                    if out_ras_file_ext != ".tif":
-                        if len(ntpath.basename(out_ras)) > 13:
-                            in_raster.setErrorMessage("Output raster: The length of the grid base name in {0} is longer than 13.".format(out_ras.replace("/", "\\")))
+            if parameters[2].value and parameters[2].altered:
+                out_ras = parameters[2].valueAsText.replace("\\", "/")
+                out_ras_file, out_ras_file_ext = os.path.splitext(out_ras)
+                if out_ras_file_ext != ".tif":
+                    if len(ntpath.basename(out_ras)) > 13:
+                        parameters[2].setErrorMessage("Output raster: The length of the grid base name in {0} is longer than 13.".format(out_ras.replace("/", "\\")))
         return
 
     def execute(self, parameters, messages):
@@ -1249,3 +1260,100 @@ class LandStatistics(TargetingTool):
 
         arcpy.DeleteField_management(out_stat_table, "POLY_VAL")  # Process: Delete Field
         arcpy.management.Delete(ras_poly)  # Delete polygon
+
+
+class LandSimilarity(TargetingTool):
+    def __init__(self):
+        """Define the tool (tool name is the name of the class)."""
+        self.label = "Land Similarity"
+        self.description = ""
+        self.canRunInBackground = False
+        self.parameters = [
+            parameter("Input raster", "in_raster", "Raster Layer", multiValue=True),
+            parameter("Input point layer", "in_point", "Feature Layer"),
+            parameter("Output extent", "out_extent", "Feature Layer", parameterType='Optional'),
+            parameter("R executable", "r_exe", "File"),
+            parameter("Output Mahalanobis raster", "out_raster", 'Raster Layer', direction='Output'),
+            parameter("Output MESS raster", "out_raster", 'Raster Layer', direction='Output')
+        ]
+
+    def getParameterInfo(self):
+        """Define parameter definitions"""
+        self.parameters[1].filter.list = ["Point"]  # Geometry type filter
+        return self.parameters
+
+    def updateParameters(self, parameters):
+        """ Modify the values and properties of parameters before internal
+            validation is performed.  This method is called whenever a parameter
+            has been changed.
+            Args:
+                parameters: Parameters from the tool.
+            Returns: Parameter values.
+        """
+
+        return
+
+    def updateMessages(self, parameters):
+        """ Modify the messages created by internal validation for each tool
+            parameter.  This method is called after internal validation.
+            Args:
+                parameters: Parameters from the tool.
+            Returns: Internal validation messages.
+        """
+        if parameters[0].value:
+            prev_input = ""
+            ras_ref = []
+            all_ras_ref = []
+            in_val_raster = parameters[0]
+            if parameters[0].altered:
+                num_rows = len(in_val_raster.values)  # The number of rows in the table
+                prev_ras_val = []
+                i = 0
+                # Get values from the generator function to show update messages
+                for row_count, in_ras_file in self.getRasterFile(in_val_raster):
+                    i += 1
+                    # Set input raster duplicate warning
+                    if len(prev_ras_val) > 0:
+                        super(LandSimilarity, self).uniqueValueValidator(prev_ras_val, in_ras_file, in_val_raster, field_id=False)  # Set duplicate input warning
+                        prev_ras_val.append(in_ras_file)
+                    else:
+                        prev_ras_val.append(in_ras_file)
+                    # Get spatial reference for all input raster
+                    spatial_ref = arcpy.Describe(in_ras_file).SpatialReference
+                    all_ras_ref.append(spatial_ref)
+                    # Set raster spatial reference errors
+                    if i == num_rows:
+                        last_spataial_ref = arcpy.Describe(in_ras_file).SpatialReference   # Get spatial reference
+                        for ref in ras_ref:
+                            warning_msg = "{0} spatial reference is different from the input {1}"
+                            super(LandSimilarity, self).setSpatialWarning(last_spataial_ref, ref, in_val_raster, warning_msg, in_ras_file, prev_input)
+                    else:
+                        spatial_ref = arcpy.Describe(in_ras_file).SpatialReference  # Get spatial reference of input rasters
+                        ras_ref.append(spatial_ref)
+            if parameters[1].value and parameters[1].altered:
+                super(LandSimilarity, self).setFcSpatialWarning(parameters[1], all_ras_ref[-1], prev_input)  # Set feature class spatial warning
+            if parameters[2].value and parameters[2].altered:
+                super(LandSimilarity, self).setFcSpatialWarning(parameters[2], all_ras_ref[-1], prev_input)
+        return
+
+    def execute(self, parameters, messages):
+        """ Execute functions to process input raster.
+            Args:
+                parameters: Parameters from the tool.
+                messages: Internal validation messages
+            Returns: Land suitability raster.
+        """
+        return
+
+    def getRasterFile(self, in_val_raster):
+        """ Get row statistics parameters from the value table
+            Args:
+                in_val_raster: Multi value input raster
+            Return:
+        """
+        for i, lst in enumerate(in_val_raster.valueAsText.split(";")):
+            row_count = i
+            lst_val = super(LandSimilarity, self).formatValueTableData(lst)  # Clean mutli value data
+            in_ras_file = lst_val[0]
+            in_ras_file = in_ras_file.replace("\\", "/")
+            yield row_count, in_ras_file  # return values
