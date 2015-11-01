@@ -1303,17 +1303,9 @@ class LandSimilarity(TargetingTool):
             Returns: Parameter values.
         """
         if parameters[0].value:
-            # Get R executable file
-            r_exe_file = ""
-            if os.path.exists("C:/Program Files/R"):
-                for root, dirs, files in os.walk("C:/Program Files/R"):
-                    for file_name in files:
-                        if file_name == "R.exe":
-                            r_exe_path = os.path.join(root, file_name).replace("/", "\\")
-                            if r_exe_path.endswith("\\bin\\x64\\R.exe"):
-                                r_exe_file = r_exe_path
             if not parameters[3].value:  # Set initial value
-                parameters[3].value = r_exe_file
+                root_dir = "C:/Program Files/R"
+                parameters[3].value = self.getRExecutable(root_dir)  # Get R executable file
         return
 
     def updateMessages(self, parameters):
@@ -1364,6 +1356,23 @@ class LandSimilarity(TargetingTool):
             Returns: Land suitability raster.
         """
         return
+
+    def getRExecutable(self, root_dir):
+        """ Get R executable file path
+            Args:
+                root_dir: Root directory
+            Return:
+                r_exe_file: R executable file path
+        """
+        r_exe_file = ""
+        if os.path.exists(root_dir):
+            for root, dirs, files in os.walk("C:/Program Files/R"):
+                for file_name in files:
+                    if file_name == "R.exe":
+                        r_exe_path = os.path.join(root, file_name).replace("/", "\\")
+                        if r_exe_path.endswith("\\bin\\x64\\R.exe"):
+                            r_exe_file = r_exe_path
+        return r_exe_file
 
     def getRasterFile(self, in_val_raster):
         """ Get row statistics parameters from the value table
