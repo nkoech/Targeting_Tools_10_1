@@ -1302,7 +1302,18 @@ class LandSimilarity(TargetingTool):
                 parameters: Parameters from the tool.
             Returns: Parameter values.
         """
-
+        if parameters[0].value:
+            # Get R executable file
+            r_exe_file = ""
+            if os.path.exists("C:/Program Files/R"):
+                for root, dirs, files in os.walk("C:/Program Files/R"):
+                    for file_name in files:
+                        if file_name == "R.exe":
+                            r_exe_path = os.path.join(root, file_name).replace("/", "\\")
+                            if r_exe_path.endswith("\\bin\\x64\\R.exe"):
+                                r_exe_file = r_exe_path
+            if not parameters[3].value:  # Set initial value
+                parameters[3].value = r_exe_file
         return
 
     def updateMessages(self, parameters):
