@@ -54,17 +54,32 @@ class TargetingTool(object):
             sys.exit()
         return spatialAnalystCheckedOut
 
+    def setRasSpatialWarning(self, ras_file, ras_ref, in_raster, prev_input):
+        """ Set raster spatial warning
+            Args:
+                ras_file: Input raster file
+                ras_ref: Input raster spatial reference
+                in_raster: Input raster parameter
+                prev_input: previous or preceding input raster with the true spatial reference
+            Return: None
+        """
+        last_spataial_ref = arcpy.Describe(ras_file).SpatialReference   # Get spatial reference
+        for ref in ras_ref:
+            warning_msg = "{0} spatial reference is different from the input {1}"
+            self.setSpatialWarning(last_spataial_ref, ref, in_raster, warning_msg, ras_file, prev_input)
+
     def setFcSpatialWarning(self, in_parameter, ras_ref, prev_input):
         """ Sets feature class spatial warning
             Args:
                 parameter: Feature class input parameter
                 ras_ref: Input raster spatial reference
+                prev_input: previous or preceding input raster with the true spatial reference
             Return: None
         """
         in_fc_param = in_parameter
         in_fc = in_parameter.valueAsText.replace("\\", "/")
         in_fc_spataial_ref = arcpy.Describe(in_fc).SpatialReference
-        warning_msg = "{0} zxzxzxspatial reference is different from the input {1}"
+        warning_msg = "{0} spatial reference is different from the input {1}"
         self.setSpatialWarning(in_fc_spataial_ref, ras_ref, in_fc_param, warning_msg, in_fc, prev_input)
 
     def setSpatialWarning(self, in_ras_ref, other_ref, tool_para, warning_msg, new_in_ras, prev_in_ras):
@@ -259,10 +274,7 @@ class LandSuitability(TargetingTool):
                     all_ras_ref.append(spatial_ref)
                     # Set raster spatial reference errors
                     if i == num_rows:
-                        last_spataial_ref = arcpy.Describe(ras_file).SpatialReference   # Get spatial reference
-                        for ref in ras_ref:
-                            warning_msg = "{0} spatial reference is different from the input {1}"
-                            super(LandSuitability, self).setSpatialWarning(last_spataial_ref, ref, in_raster, warning_msg, ras_file, prev_input)
+                        super(LandSuitability, self).setRasSpatialWarning(ras_file, ras_ref, in_raster, prev_input)  # Set raster spatial warning
                     else:
                         spatial_ref = arcpy.Describe(ras_file).SpatialReference  # Get spatial reference of rasters in value table
                         ras_ref.append(spatial_ref)
@@ -1323,10 +1335,7 @@ class LandSimilarity(TargetingTool):
                     all_ras_ref.append(spatial_ref)
                     # Set raster spatial reference errors
                     if i == num_rows:
-                        last_spataial_ref = arcpy.Describe(in_ras_file).SpatialReference   # Get spatial reference
-                        for ref in ras_ref:
-                            warning_msg = "{0} spatial reference is different from the input {1}"
-                            super(LandSimilarity, self).setSpatialWarning(last_spataial_ref, ref, in_val_raster, warning_msg, in_ras_file, prev_input)
+                        super(LandSimilarity, self).setRasSpatialWarning(in_ras_file, ras_ref, in_val_raster, prev_input)  # Set raster spatial warning
                     else:
                         spatial_ref = arcpy.Describe(in_ras_file).SpatialReference  # Get spatial reference of input rasters
                         ras_ref.append(spatial_ref)
