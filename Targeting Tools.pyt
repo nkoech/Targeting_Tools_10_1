@@ -16,7 +16,7 @@
     Modified:   September 2015
 """
 
-import os, sys, csv, re, time, arcpy, shutil, ntpath
+import os, sys, csv, re, time, arcpy, shutil, ntpath, subprocess
 from itertools import *
 
 arcpy.env.overwriteOutput = True
@@ -178,6 +178,18 @@ class TargetingTool(object):
             if out_ras_file_ext != ".tif":
                 if len(ntpath.basename(out_ras)) > 13:
                     out_ras_param.setErrorMessage("Output raster: The length of the grid base name in {0} is longer than 13.".format(out_ras.replace("/", "\\")))
+
+    def setDuplicateNameError(self, out_ras_1, out_ras_2):
+        """ Set duplicate file name error
+            Args:
+                out_ras_1: Primary parameter
+                out_ras_2: Secondary parameter
+            Return: None
+        """
+        if out_ras_1.value and out_ras_1.altered:
+            if out_ras_2.value:
+                if out_ras_1.valueAsText == out_ras_2.valueAsText:
+                    out_ras_1.setErrorMessage("Duplicate output names are not allowed")
 
 
 class LandSuitability(TargetingTool):
@@ -1357,6 +1369,8 @@ class LandSimilarity(TargetingTool):
             r_exe_path = parameters[3].valueAsText
             if not r_exe_path.endswith(("\\bin\\R.exe", "\\bin\\x64\\R.exe", "\\bin\\i386\\R.exe")):
                 parameters[3].setErrorMessage("{0} is not a valid R executable".format(r_exe_path))
+        super(LandSimilarity, self).setDuplicateNameError(parameters[4], parameters[5])  # Set duplicate file name error
+        super(LandSimilarity, self).setDuplicateNameError(parameters[5], parameters[4])
         super(LandSimilarity, self).setFileNameLenError(parameters[4])  # Set ESRI grid output file size error
         super(LandSimilarity, self).setFileNameLenError(parameters[5])
         return
@@ -1369,21 +1383,38 @@ class LandSimilarity(TargetingTool):
             Returns: Land suitability raster.
         """
         try:
+            r_exe_path = parameters[3].valueAsText
             out_mnobis_ras = parameters[4].valueAsText.replace("\\", "/")  # Get mahalanobis output
-            #out_mess_ras = parameters[4].valueAsText.replace("\\","/")  # Get mess output
             ras_temp_path = ntpath.dirname(out_mnobis_ras)  # Get path without file name
             ras_temp_path += "/Temp/"
-
+            # Create temporary directory if it doesn't exist
             if not os.path.exists(ras_temp_path):
-                os.makedirs(ras_temp_path)  # Create new directory
+                os.makedirs(ras_temp_path)
+            # Copy point layer to temporary directory
+            in_fc_pt = parameters[1].valueAsText.replace("\\", "/")
+            arcpy.Copy_management(in_fc_pt, ras_temp_path + ntpath.basename(in_fc_pt))
+            in_fc_pt = ras_temp_path + ntpath.basename(in_fc_pt)
 
-            # Raster minus operation
+            # raster sample creation
             if parameters[2].value:
                 in_fc = super(LandSimilarity, self).getInputFc(parameters[2])["in_fc"]
                 extent = arcpy.Describe(in_fc).extent  # Get feature class extent
-                self.createValueSample(parameters, ras_temp_path, in_fc, extent)  # Create raster cell value sample
+                self.createValueSample(parameters, in_fc_pt, ras_temp_path, in_fc, extent)  # Create raster cell value sample
             else:
-                self.createValueSample(parameters, ras_temp_path, in_fc=None, extent=None)  # Create raster cell value sample
+                self.createValueSample(parameters, in_fc_pt, ras_temp_path, in_fc=None, extent=None)  # Create raster cell value sample
+
+            # Remove temporary clipped files to clear space -> ras_mask_
+
+            arcpy.AddMessage("Joining {0} to {1} \n".format(in_fc_pt, ras_temp_path + "temp.dbf"))
+            arcpy.JoinField_management(in_fc_pt, "FID", ras_temp_path + "temp.dbf", "OID", "")  # Join tables
+            out_csv = ras_temp_path + "temp.csv"
+            self.writeToCSV(in_fc_pt, out_csv)  # Write feature class table to CSV file
+
+            # Write function to copy original point layer to another folder before join, delete after join and copy back
+
+            self.createRScript(parameters, ras_temp_path)  # Create R script
+            self.runCommand(r_exe_path, ras_temp_path)  # Run R command
+            self.asciiToRasterConversion(parameters, ras_temp_path)  # ASCII to raster conversion
             return
         except Exception as ex:
             arcpy.AddMessage('ERROR: {0}'.format(ex))
@@ -1392,7 +1423,7 @@ class LandSimilarity(TargetingTool):
         """ Get R executable file path
             Args:
                 root_dir: Root directory
-            Return:
+            Returns:
                 r_exe_file: R executable file path
         """
         r_exe_file = ""
@@ -1405,34 +1436,131 @@ class LandSimilarity(TargetingTool):
                             r_exe_file = r_exe_path
         return r_exe_file
 
-    def createValueSample(self, parameters, ras_temp_path, in_fc, extent):
+    def createValueSample(self, parameters, in_fc_pt, ras_temp_path, in_fc, extent):
         """ Create raster cell value sample
             Args:
                 parameters: Tool parameters
+                in_fc_pt: Input point layer
                 ras_temp_path: Temporary folder
                 in_fc: Feature class input.
                 extent: Feature class extent.
-            Return: None
+            Returns: None
         """
         in_val_raster = parameters[0]
-        in_fc_pt = parameters[1].valueAsText.replace("\\", "/")
+        """in_fc_pt = parameters[1].valueAsText.replace("\\", "/")"""
         sample_in_ras = []
         for row_count, in_ras_file in self.getRasterFile(in_val_raster):
             i = row_count + 1
             if extent is not None:
-                arcpy.AddMessage("Clipping {0}\n".format(ntpath.basename(in_ras_file)))
+                arcpy.AddMessage("Clipping {0} \n".format(ntpath.basename(in_ras_file)))
                 arcpy.Clip_management(in_ras_file, "{0} {1} {2} {3}".format(extent.XMin, extent.YMin, extent.XMax, extent.YMax), ras_temp_path + "ras_mask_" + str(i), in_fc, "#", "ClippingGeometry")
                 sample_in_ras.append(ras_temp_path + "ras_mask_" + str(i))
+                arcpy.AddMessage("Converting {0} to ASCII file {1} \n".format(ras_temp_path + "ras_mask_" + str(i), ras_temp_path + "tempAscii_" + str(i) + ".asc"))
+                arcpy.RasterToASCII_conversion(ras_temp_path + "ras_mask_" + str(i), ras_temp_path + "tempAscii_" + str(i) + ".asc")
             else:
                 sample_in_ras.append(in_ras_file)
-        arcpy.AddMessage("Creating sample values")
+                arcpy.AddMessage("Converting {0} to ASCII file {1} \n".format(in_ras_file, ras_temp_path + "tempAscii_" + str(i) + ".asc"))
+                arcpy.RasterToASCII_conversion(in_ras_file, ras_temp_path + "tempAscii_" + str(i) + ".asc")
+        arcpy.AddMessage("Creating sample values \n")
         arcpy.gp.Sample_sa(sample_in_ras, in_fc_pt, ras_temp_path + "temp.dbf", "NEAREST")  # Process: Sample
+
+    def writeToCSV(self, in_fc_pt, out_csv):
+        """ Write feature class table to CSV file
+            Args:
+                in_fc_pt: Input point layer
+                out_csv: Output CSV file
+            Returns: None
+        """
+        # Get field names
+        fields = arcpy.ListFields(in_fc_pt)
+        field_names = [field.name for field in fields]
+        arcpy.AddMessage("Exporting {0} table to {1} \n".format(in_fc_pt, out_csv))
+        with open(out_csv, 'wb') as f:
+            w = csv.writer(f)
+            w.writerow(field_names)  # Write field names to CSV file as headers
+            # Search through rows and write values to CSV
+            for row in arcpy.SearchCursor(in_fc_pt):
+                field_vals = [row.getValue(field.name) for field in fields]
+                w.writerow(field_vals)
+            del row
+
+    def createRScript(self, parameters, ras_temp_path):
+        """ Create R script
+            Args:
+                parameters: Tool parameters
+                ras_temp_path: Temporary folder
+            Returns: None
+        """
+        i = 0
+        in_val_raster = parameters[0]
+        #  Get number of rasters
+        for row_count, in_ras_file in self.getRasterFile(in_val_raster):
+            row_count += 1
+            i = row_count
+        with open(ras_temp_path + 'out_script.r', 'w') as f:
+            cwd = os.path.dirname(os.path.realpath(__file__))  # Toolbox current working directory
+            cwd = self.getDirectoryPath(cwd)  # Get subdirectory path
+            similar_script = self.getFilePath(cwd, "similarity_")  # Get script path
+            read_script = self.getFilePath(cwd, "readAscii")
+            write_script = self.getFilePath(cwd, "writeAscii")
+            # Write out a script
+            f.write('source("' + similar_script + '"); similarityAnalysis(' + str(i) + ',"' + read_script + '","' + write_script + '","' + ras_temp_path + '") \n \n')
+
+    def getDirectoryPath(self, cwd):
+        """ Get subdirectory path from the toolbox directory
+            Args:
+                cwd: Current toolbox directory
+            Returns: Script subdirectory full path
+        """
+        for name in os.listdir(cwd):
+            if os.path.isdir(os.path.join(cwd, name)):
+                if name == "R_Scripts":
+                    return os.path.join(cwd, name)
+
+    def getFilePath(self, cwd, start_char):
+        """ Get file path from the toolbox directory
+            Args:
+                cwd: Current script directory
+                start_char: File name start character
+            Returns: File full path
+        """
+        for f in os.listdir(cwd):
+            if not os.path.isdir(os.path.join(cwd, f)):
+                if f.startswith(start_char) and f.endswith(".r"):
+                    return os.path.join(cwd, f).replace("\\", "/")
+
+    def runCommand(self, r_exe_path, ras_temp_path):
+        """ Run R command
+            Args:
+                r_exe_path: Executable R file
+                ras_temp_path: Temporary folder
+            Returns: None
+        """
+        r_cmd = '"' + r_exe_path + '" --vanilla --slave --file="' + ras_temp_path + 'out_script.r"'  # r command
+        arcpy.AddMessage("Running similarity analysis \n")
+        subprocess.call(r_cmd, shell=False)  # Open shell and run R command
+
+    def asciiToRasterConversion(self, parameters, ras_temp_path):
+        """ ASCII to raster conversion
+            Args:
+                Parameters: Tool parameters
+                ras_temp_path: Temporary folder
+            Returns: None
+        """
+        out_mnobis_ras = parameters[4].valueAsText.replace("\\", "/")  # Get mahalanobis output
+        out_mess_ras = parameters[5].valueAsText.replace("\\", "/")  # Get mess output
+        arcpy.AddMessage("ASCII conversion of {0} to raster {1} \n".format(ras_temp_path + "MahalanobisDist.asc", out_mnobis_ras))
+        arcpy.ASCIIToRaster_conversion(ras_temp_path + "MahalanobisDist.asc", out_mnobis_ras, "INTEGER")
+        arcpy.AddMessage("ASCII conversion of {0} to raster {1} \n".format(ras_temp_path + "MESS.asc", out_mess_ras))
+        arcpy.ASCIIToRaster_conversion(ras_temp_path + "MESS.asc", out_mess_ras, "INTEGER")  # Process ASCII to raster
 
     def getRasterFile(self, in_val_raster):
         """ Get row statistics parameters from the value table
             Args:
                 in_val_raster: Multi value input raster
-            Return:
+            Returns:
+                row_count: Input raster counter
+                in_ras_file: Input raster file from the multi value parameter
         """
         for i, lst in enumerate(in_val_raster.valueAsText.split(";")):
             row_count = i
