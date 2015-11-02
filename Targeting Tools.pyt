@@ -16,7 +16,7 @@
     Modified:   September 2015
 """
 
-import os, sys, re, time, arcpy, shutil, ntpath
+import os, sys, csv, re, time, arcpy, shutil, ntpath
 from itertools import *
 
 arcpy.env.overwriteOutput = True
@@ -1368,7 +1368,25 @@ class LandSimilarity(TargetingTool):
                 messages: Internal validation messages
             Returns: Land suitability raster.
         """
-        return
+        try:
+            out_mnobis_ras = parameters[4].valueAsText.replace("\\", "/")  # Get mahalanobis output
+            #out_mess_ras = parameters[4].valueAsText.replace("\\","/")  # Get mess output
+            ras_temp_path = ntpath.dirname(out_mnobis_ras)  # Get path without file name
+            ras_temp_path += "/Temp/"
+
+            if not os.path.exists(ras_temp_path):
+                os.makedirs(ras_temp_path)  # Create new directory
+
+            # Raster minus operation
+            if parameters[2].value:
+                in_fc = super(LandSimilarity, self).getInputFc(parameters[2])["in_fc"]
+                extent = arcpy.Describe(in_fc).extent  # Get feature class extent
+                self.createValueSample(parameters, ras_temp_path, in_fc, extent)  # Create raster cell value sample
+            else:
+                self.createValueSample(parameters, ras_temp_path, in_fc=None, extent=None)  # Create raster cell value sample
+            return
+        except Exception as ex:
+            arcpy.AddMessage('ERROR: {0}'.format(ex))
 
     def getRExecutable(self, root_dir):
         """ Get R executable file path
@@ -1386,6 +1404,29 @@ class LandSimilarity(TargetingTool):
                         if r_exe_path.endswith("\\bin\\x64\\R.exe"):
                             r_exe_file = r_exe_path
         return r_exe_file
+
+    def createValueSample(self, parameters, ras_temp_path, in_fc, extent):
+        """ Create raster cell value sample
+            Args:
+                parameters: Tool parameters
+                ras_temp_path: Temporary folder
+                in_fc: Feature class input.
+                extent: Feature class extent.
+            Return: None
+        """
+        in_val_raster = parameters[0]
+        in_fc_pt = parameters[1].valueAsText.replace("\\", "/")
+        sample_in_ras = []
+        for row_count, in_ras_file in self.getRasterFile(in_val_raster):
+            i = row_count + 1
+            if extent is not None:
+                arcpy.AddMessage("Clipping {0}\n".format(ntpath.basename(in_ras_file)))
+                arcpy.Clip_management(in_ras_file, "{0} {1} {2} {3}".format(extent.XMin, extent.YMin, extent.XMax, extent.YMax), ras_temp_path + "ras_mask_" + str(i), in_fc, "#", "ClippingGeometry")
+                sample_in_ras.append(ras_temp_path + "ras_mask_" + str(i))
+            else:
+                sample_in_ras.append(in_ras_file)
+        arcpy.AddMessage("Creating sample values")
+        arcpy.gp.Sample_sa(sample_in_ras, in_fc_pt, ras_temp_path + "temp.dbf", "NEAREST")  # Process: Sample
 
     def getRasterFile(self, in_val_raster):
         """ Get row statistics parameters from the value table
