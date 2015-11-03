@@ -16,7 +16,7 @@
     Modified:   September 2015
 """
 
-import os, sys, csv, re, time, arcpy, shutil, ntpath, subprocess
+import os, sys, csv, re, time, arcpy, shutil, ntpath, subprocess, traceback
 from itertools import *
 
 arcpy.env.overwriteOutput = True
@@ -1403,21 +1403,24 @@ class LandSimilarity(TargetingTool):
                 self.createValueSample(parameters, in_fc_pt, ras_temp_path, in_fc, extent)  # Create raster cell value sample
             else:
                 self.createValueSample(parameters, in_fc_pt, ras_temp_path, in_fc=None, extent=None)  # Create raster cell value sample
-
-            # Remove temporary clipped files to clear space -> ras_mask_
-
+            self.deleteTempFile(parameters, ras_temp_path)  # Delete temporary files
             arcpy.AddMessage("Joining {0} to {1} \n".format(in_fc_pt, ras_temp_path + "temp.dbf"))
             arcpy.JoinField_management(in_fc_pt, "FID", ras_temp_path + "temp.dbf", "OID", "")  # Join tables
             out_csv = ras_temp_path + "temp.csv"
             self.writeToCSV(in_fc_pt, out_csv)  # Write feature class table to CSV file
-
-            # Write function to copy original point layer to another folder before join, delete after join and copy back
-
+            arcpy.management.Delete(in_fc_pt)  # Delete vector
             self.createRScript(parameters, ras_temp_path)  # Create R script
             self.runCommand(r_exe_path, ras_temp_path)  # Run R command
             self.asciiToRasterConversion(parameters, ras_temp_path)  # ASCII to raster conversion
+            shutil.rmtree(ras_temp_path)
             return
         except Exception as ex:
+            #tb = sys.exc_info()[2]
+            #tbinfo = traceback.format_tb(tb)[0]
+            #pymsg = "PYTHON ERRORS:\nTraceback info:\n" + tbinfo + "\nError Info:\n" + str(sys.exc_info()[1])
+            #msgs = "ArcPy ERRORS:\n" + arcpy.GetMessages(2) + "\n"
+            #arcpy.AddError(pymsg)
+            #arcpy.AddError(msgs)
             arcpy.AddMessage('ERROR: {0}'.format(ex))
 
     def getRExecutable(self, root_dir):
@@ -1448,7 +1451,6 @@ class LandSimilarity(TargetingTool):
             Returns: None
         """
         in_val_raster = parameters[0]
-        """in_fc_pt = parameters[1].valueAsText.replace("\\", "/")"""
         sample_in_ras = []
         for row_count, in_ras_file in self.getRasterFile(in_val_raster):
             i = row_count + 1
@@ -1464,6 +1466,17 @@ class LandSimilarity(TargetingTool):
                 arcpy.RasterToASCII_conversion(in_ras_file, ras_temp_path + "tempAscii_" + str(i) + ".asc")
         arcpy.AddMessage("Creating sample values \n")
         arcpy.gp.Sample_sa(sample_in_ras, in_fc_pt, ras_temp_path + "temp.dbf", "NEAREST")  # Process: Sample
+
+    def deleteTempFile(self, parameters, ras_temp_path):
+        """ Delete temporary files
+            Args:
+                parameters: Tool parameters
+                ras_temp_path: Temporary folder
+            Returns: None
+        """
+        for i in xrange(1, len(parameters[0].values)):
+            if arcpy.Exists(ras_temp_path + "ras_mask_" + str(i)):
+                arcpy.management.Delete(ras_temp_path + "ras_mask_" + str(i))  # Delete temporary files
 
     def writeToCSV(self, in_fc_pt, out_csv):
         """ Write feature class table to CSV file
