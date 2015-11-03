@@ -1324,7 +1324,8 @@ class LandSimilarity(TargetingTool):
         if parameters[0].value:
             if not parameters[3].value:  # Set initial value
                 root_dir = "C:/Program Files/R"
-                parameters[3].value = self.getRExecutable(root_dir)  # Get R executable file
+                if os.path.isdir(root_dir):
+                    parameters[3].value = self.getRExecutable(root_dir)  # Get R executable file
         return
 
     def updateMessages(self, parameters):
@@ -1504,7 +1505,7 @@ class LandSimilarity(TargetingTool):
             read_script = self.getFilePath(cwd, "readAscii")
             write_script = self.getFilePath(cwd, "writeAscii")
             # Write out a script
-            f.write('source("' + similar_script + '"); similarityAnalysis(' + str(i) + ',"' + read_script + '","' + write_script + '","' + ras_temp_path + '") \n \n')
+            f.write('source("' + similar_script + '"); similarityAnalysis(' + str(i) + ',"' + read_script + '","' + write_script + '","' + ras_temp_path + '") \n')
 
     def getDirectoryPath(self, cwd):
         """ Get subdirectory path from the toolbox directory
@@ -1547,12 +1548,19 @@ class LandSimilarity(TargetingTool):
                 ras_temp_path: Temporary folder
             Returns: None
         """
+        r_exe_file = parameters[3].valueAsText.replace("\\", "/")  # Get R.exe file path
         out_mnobis_ras = parameters[4].valueAsText.replace("\\", "/")  # Get mahalanobis output
         out_mess_ras = parameters[5].valueAsText.replace("\\", "/")  # Get mess output
         arcpy.AddMessage("ASCII conversion of {0} to raster {1} \n".format(ras_temp_path + "MahalanobisDist.asc", out_mnobis_ras))
         arcpy.ASCIIToRaster_conversion(ras_temp_path + "MahalanobisDist.asc", out_mnobis_ras, "INTEGER")
-        arcpy.AddMessage("ASCII conversion of {0} to raster {1} \n".format(ras_temp_path + "MESS.asc", out_mess_ras))
-        arcpy.ASCIIToRaster_conversion(ras_temp_path + "MESS.asc", out_mess_ras, "INTEGER")  # Process ASCII to raster
+        if os.path.isfile(ras_temp_path + "MESS.asc"):
+            arcpy.AddMessage("ASCII conversion of {0} to raster {1} \n".format(ras_temp_path + "MESS.asc", out_mess_ras))
+            arcpy.ASCIIToRaster_conversion(ras_temp_path + "MESS.asc", out_mess_ras, "INTEGER")  # Process ASCII to raster
+        else:
+            r_version = r_exe_file.rsplit("/", 3)[0]
+            r_modEvA = r_version + "/library/modEvA"
+            if not os.path.isdir(r_modEvA):
+                arcpy.AddError('Error: {0} package missing. Connect to the internet and run the tool again. Alternatively download and install "modEvA" package.'.format(r_modEvA))
 
     def getRasterFile(self, in_val_raster):
         """ Get row statistics parameters from the value table
