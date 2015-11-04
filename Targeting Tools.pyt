@@ -388,8 +388,7 @@ class LandSuitability(TargetingTool):
                 j += 1
                 arcpy.AddMessage("Generating minimum values for {0} and {1}\n".format("ras_min4_" + str(j), "ras_max4_" + str(j)))
                 arcpy.gp.CellStatistics_sa(ras_temp_path + "ras_min4_" + str(j) + ";" + ras_temp_path + "ras_max4_" + str(j), ras_temp_path + "ras_MnMx_" + str(j), "MINIMUM", "DATA")
-                arcpy.management.Delete(ras_temp_path + "ras_min4_" + str(j))
-                arcpy.management.Delete(ras_temp_path + "ras_max4_" + str(j))
+                super(LandSuitability, self).deleteFile(ras_temp_path, "ras_min4_" + str(j), "ras_max4_" + str(j))  # Delete file
 
             ras_temp_file = self.setCombineFile(in_raster, ras_temp_path)  # Build a list with lists of temporary raster files
             out_ras_temp = 1  # Initial temporary raster value
@@ -399,16 +398,16 @@ class LandSuitability(TargetingTool):
             for item in ras_temp_file:
                 if len(item) > 1:
                     n += 1
-                    arcpy.AddMessage("Generating maximum values from minimum values raster files")
+                    arcpy.AddMessage("Generating maximum values from minimum values raster files \n")
                     arcpy.gp.CellStatistics_sa(item, ras_temp_path + "rs_MxStat_" + str(n), "MAXIMUM", "DATA")
                 else:
                     for f in item:
                         n_ras += 1
-                        arcpy.AddMessage("Multiplying file {0} with input raster\n".format(ntpath.basename(f)))
+                        arcpy.AddMessage("Multiplying file {0} with input raster \n".format(ntpath.basename(f)))
                         out_ras_temp = out_ras_temp * arcpy.Raster(f)
 
             if arcpy.Exists(out_ras_temp):
-                arcpy.AddMessage("Saving Temporary Output\n")
+                arcpy.AddMessage("Saving Temporary Output \n")
                 out_ras_temp.save(ras_temp_path + "rs_TxTemp")
                 out_ras_temp = arcpy.Raster(ras_temp_path + "rs_TxTemp")  # Initial temporary raster file for the next calculation
 
@@ -417,22 +416,22 @@ class LandSuitability(TargetingTool):
                 for j in range(0, n):
                     n_ras += 1
                     j += 1
-                    arcpy.AddMessage("Multiplying file {0} with input raster {1}\n".format(out_ras_temp, "rs_MxStat_" + str(j)))
+                    arcpy.AddMessage("Multiplying file {0} with input raster {1} \n".format(out_ras_temp, "rs_MxStat_" + str(j)))
                     out_ras_temp = out_ras_temp * arcpy.Raster(ras_temp_path + "rs_MxStat_" + str(j))
 
-            arcpy.AddMessage("Generating suitability output\n")
+            arcpy.AddMessage("Generating suitability output \n")
             out_ras_temp = out_ras_temp ** (1 / float(n_ras))  # Calculate geometric mean
             arcpy.AddMessage("Saving suitability output\n")
             out_ras_temp.save(out_ras)
-            arcpy.AddMessage("Suitability output saved!\n")
-            arcpy.AddMessage("Creating data input log\n")
+            arcpy.AddMessage("Suitability output saved! \n")
+            arcpy.AddMessage("Creating data input log \n")
             self.createParametersLog(out_ras, ras_max_min, in_raster)  # create parameters log file
-            arcpy.AddMessage("Deleting temporary folder\n")
+            arcpy.AddMessage("Deleting temporary folder \n")
             shutil.rmtree(ras_temp_path)
             self.loadOutput(parameters, out_ras)  # Load output to current MXD
             return
         except Exception as ex:
-            arcpy.AddMessage('ERROR: {0}'.format(ex))
+            arcpy.AddMessage('ERROR: {0} \n'.format(ex))
 
     def rasterMinusInit(self, in_raster, ras_max_min, ras_temp_path, in_fc, extent):
         """ Initializes raster minus operation
@@ -449,12 +448,12 @@ class LandSuitability(TargetingTool):
             i += 1
             if extent is not None:
                 # Raster clip operation
-                arcpy.AddMessage("Clipping {0}\n".format(ntpath.basename(ras_file)))
+                arcpy.AddMessage("Clipping {0} \n".format(ntpath.basename(ras_file)))
                 arcpy.Clip_management(ras_file, "{0} {1} {2} {3}".format(extent.XMin, extent.YMin, extent.XMax, extent.YMax), ras_temp_path + "ras_mask1_" + str(i), in_fc, "#", "ClippingGeometry")
                 # Masked raster minus operation
                 self.rasterMinus(ras_temp_path + "ras_mask1_" + str(i), minVal, "ras_min1_" + str(i), ras_temp_path, min_ras=True)
                 self.rasterMinus(ras_temp_path + "ras_mask1_" + str(i), maxVal, "ras_max1_" + str(i), ras_temp_path, min_ras=False)
-                arcpy.management.Delete(ras_temp_path + "ras_mask1_" + str(i))  # Delete temporary raster files
+                super(LandSuitability, self).deleteFile(ras_temp_path, "ras_mask1_" + str(i))  # Delete temporary raster files
             else:
                 # Raster minus operation
                 self.rasterMinus(ras_file, minVal, "ras_min1_" + str(i), ras_temp_path, min_ras=True)
@@ -471,10 +470,10 @@ class LandSuitability(TargetingTool):
             Return: Raster layer output
         """
         if min_ras:
-            arcpy.AddMessage("Calculating {0} - {1}\n".format(ntpath.basename(ras_file), val))
+            arcpy.AddMessage("Calculating {0} - {1} \n".format(ntpath.basename(ras_file), val))
             arcpy.gp.Minus_sa(ras_file, val, ras_temp_path + ras_output)
         else:
-            arcpy.AddMessage("Calculating {0} - {1}\n".format(val, ntpath.basename(ras_file)))
+            arcpy.AddMessage("Calculating {0} - {1} \n".format(val, ntpath.basename(ras_file)))
             arcpy.gp.Minus_sa(val, ras_file, ras_temp_path + ras_output)
 
     def rasterConditionInit(self, num_rows, ras_min_input, ras_min_output, ras_max_input, ras_max_output, ras_temp_path, comp_oper, comp_val):
@@ -508,9 +507,9 @@ class LandSuitability(TargetingTool):
             Return:
                 Raster layer output
         """
-        arcpy.AddMessage("Creating conditional output for {0}\n".format(ras_input))
+        arcpy.AddMessage("Creating conditional output for {0} \n".format(ras_input))
         arcpy.gp.Con_sa(ras_temp_path + ras_input, comp_val, ras_temp_path + ras_output, ras_temp_path + ras_input, "\"Value\" " + comp_oper + comp_val)
-        arcpy.management.Delete(ras_temp_path + ras_input)  # Delete temporary raster files
+        super(LandSuitability, self).deleteFile(ras_temp_path, ras_input)  # Delete temporary raster files
 
     def rasterDivide(self, opt_val, m_val, ras_input, ras_output, ras_temp_path, min_ras):
         """ Handles raster divide operation
@@ -526,19 +525,19 @@ class LandSuitability(TargetingTool):
         """
         if min_ras:
             if float(opt_val) - float(m_val) == 0:
-                arcpy.AddMessage("Calculating {0} / {1}\n".format(ras_input, "1"))
+                arcpy.AddMessage("Calculating {0} / {1} \n".format(ras_input, "1"))
                 arcpy.gp.Divide_sa(ras_temp_path + ras_input, "1", ras_temp_path + ras_output)
             else:
-                arcpy.AddMessage("Calculating {0} / {1} - {2}\n".format(ras_input, opt_val, m_val))
+                arcpy.AddMessage("Calculating {0} / {1} - {2} \n".format(ras_input, opt_val, m_val))
                 arcpy.gp.Divide_sa(ras_temp_path + ras_input, str(float(opt_val) - float(m_val)), ras_temp_path + ras_output)
         else:
             if float(m_val) - float(opt_val) == 0:
-                arcpy.AddMessage("Calculating {0} / {1}\n".format(ras_input, "1"))
+                arcpy.AddMessage("Calculating {0} / {1} \n".format(ras_input, "1"))
                 arcpy.gp.Divide_sa(ras_temp_path + ras_input, "1", ras_temp_path + ras_output)
             else:
-                arcpy.AddMessage("Calculating {0} / {1} - {2}\n".format(ras_input, m_val, opt_val))
+                arcpy.AddMessage("Calculating {0} / {1} - {2} \n".format(ras_input, m_val, opt_val))
                 arcpy.gp.Divide_sa(ras_temp_path + ras_input, str(float(m_val) - float(opt_val)), ras_temp_path + ras_output)
-        arcpy.management.Delete(ras_temp_path + ras_input)
+        super(LandSuitability, self).deleteFile(ras_temp_path, ras_input)
 
     def setCombineFile(self, in_raster, ras_temp_path):
         """ Build a list with lists of temporary raster files
@@ -862,7 +861,7 @@ class LandStatistics(TargetingTool):
                 in_fc = super(LandStatistics, self).getInputFc(parameters[7])["in_fc"]  # Get feature file path
                 in_fc_file = super(LandStatistics, self).getInputFc(parameters[7])["in_fc_file"]  # Get feature file name
                 in_fc_field = parameters[8].valueAsText
-                arcpy.AddMessage("Converting polygon {0} to raster\n".format(in_fc_file))
+                arcpy.AddMessage("Converting polygon {0} to raster \n".format(in_fc_file))
                 arcpy.PolygonToRaster_conversion(in_fc, in_fc_field, ras_temp_path + "ras_poly", "CELL_CENTER", "NONE", in_raster)  # Convert polygon to raster
                 arcpy.gp.Times_sa(ras_temp_path + "ras_poly", "1000", ras_temp_path + "ras_multi")  # Process: Times
                 in_raster = self.reclassifyRaster(parameters, ras_temp_path)  # Reclassify input raster
@@ -875,7 +874,7 @@ class LandStatistics(TargetingTool):
             shutil.rmtree(ras_temp_path)
             return
         except Exception as ex:
-            arcpy.AddMessage('ERROR: {0}'.format(ex))
+            arcpy.AddMessage('ERROR: {0} \n'.format(ex))
 
     def disableEnableParameter(self, parameters, val_1, val_2, boolean_val, enabled_val):
         """Disable or enable tool parameters
@@ -993,16 +992,16 @@ class LandStatistics(TargetingTool):
             cls_width = float(max_val - min_val)/num_cls  # Class width
             if cls_width.is_integer():
                 cls_width = int(cls_width)  # Convert to integer
-            arcpy.AddMessage("Creating reclassify range for {0}\n".format(in_raster))
+            arcpy.AddMessage("Creating reclassify range for {0} \n".format(in_raster))
             equal_interval_val = self.getEqualIntervalRemapVal(min_val, cls_width, num_cls)  # List of reclassify value lists
-            arcpy.AddMessage("Reclassifying {0}\n".format(in_raster))
+            arcpy.AddMessage("Reclassifying {0} \n".format(in_raster))
             reclass_raster = self.reclassifyEqualInterval(in_raster, ras_temp_path, equal_interval_val)  # Reclassify input raster layer
         elif parameters[1].value == "RECLASS BY TABLE":
             in_table = parameters[3].valueAsText
             from_val = parameters[4].valueAsText
             to_val = parameters[5].valueAsText
             new_val = parameters[6].valueAsText
-            arcpy.AddMessage("Reclassifying {0}\n".format(in_raster))
+            arcpy.AddMessage("Reclassifying {0} \n".format(in_raster))
             arcpy.gp.ReclassByTable_sa(in_raster, in_table, from_val, to_val, new_val, ras_temp_path + "ras_reclass", "DATA")  # Process: Reclass by Table
             reclass_raster = ras_temp_path + "ras_reclass"
         else:
@@ -1164,10 +1163,10 @@ class LandStatistics(TargetingTool):
             Returns: Saves a dbf table to memory
         """
         if data_val.lower() == "yes":
-            arcpy.AddMessage("Calculating land statistics for {0}".format(ras_val_file))
+            arcpy.AddMessage("Calculating land statistics for {0} \n".format(ras_val_file))
             arcpy.gp.ZonalStatisticsAsTable_sa(in_raster, "Value", ras_val_file, out_stat_table, "DATA", stats_type_edit)  # Process: Zonal Statistics as Table
         else:
-            arcpy.AddMessage("Calculating land statistics for {0}".format(ras_val_file))
+            arcpy.AddMessage("Calculating land statistics for {0} \n".format(ras_val_file))
             arcpy.gp.ZonalStatisticsAsTable_sa(in_raster, "Value", ras_val_file, out_stat_table, "NODATA", stats_type_edit)  # Process: Zonal Statistics as Table
 
     def configZonalStatisticsTable(self, parameters, ras_temp_path, out_table, in_vector):
@@ -1198,7 +1197,7 @@ class LandStatistics(TargetingTool):
             if in_vector:
                 self.addFieldValueZonalStatisticsTable(parameters, out_table, ras_temp_path, single_out_stat_table)
             else:
-                arcpy.AddMessage("Moving file {0} to {1}\n".format(single_out_stat_table, single_move_stat_table))
+                arcpy.AddMessage("Moving file {0} to {1} \n".format(single_out_stat_table, single_move_stat_table))
                 self.moveFile(single_out_stat_table, single_move_stat_table)
 
     def updateZonalStatisticsTable(self, out_table, ras_temp_path, row_count, out_table_name, first_stat_table, table_short_name):
@@ -1214,9 +1213,9 @@ class LandStatistics(TargetingTool):
         """
         out_stat_table = ras_temp_path + out_table_name + ".dbf"
         move_stat_table = out_table + "/" + out_table_name + ".dbf"
-        arcpy.AddMessage("Renaming fields in {0}\n".format(out_table_name + ".dbf"))
+        arcpy.AddMessage("Renaming fields in {0} \n".format(out_table_name + ".dbf"))
         out_table_view = self.renameTableField(out_stat_table, out_table_name, table_short_name, ras_temp_path)  # Rename table fields
-        arcpy.AddMessage("Moving file {0} to {1}\n".format(out_stat_table, move_stat_table))
+        arcpy.AddMessage("Moving file {0} to {1} \n".format(out_stat_table, move_stat_table))
         self.moveFile(out_stat_table, move_stat_table)  # Move original tables to output folders
         if row_count > 0:
             field_names = [f.name for f in arcpy.ListFields(out_table_view)]  # Get all field names
@@ -1288,10 +1287,10 @@ class LandStatistics(TargetingTool):
             # Add values to table
             arcpy.AddMessage("Adding ID values to new fields in {0} \n".format(first_stat_table))
             self.addValuesZonalStatisticsTable(ras_poly, first_stat_table)
-            arcpy.AddMessage("Moving file {0} to {1}\n".format(first_stat_table, combined_stat_table))
+            arcpy.AddMessage("Moving file {0} to {1} \n".format(first_stat_table, combined_stat_table))
             self.moveFile(first_stat_table, combined_stat_table)
         else:
-            arcpy.AddMessage("Moving file {0} to {1}\n".format(first_stat_table, combined_stat_table))
+            arcpy.AddMessage("Moving file {0} to {1} \n".format(first_stat_table, combined_stat_table))
             self.moveFile(first_stat_table, combined_stat_table)
 
     def addTableField(self, first_stat_table, in_fc_field):
@@ -1456,7 +1455,7 @@ class LandSimilarity(TargetingTool):
             #msgs = "ArcPy ERRORS:\n" + arcpy.GetMessages(2) + "\n"
             #arcpy.AddError(pymsg)
             #arcpy.AddError(msgs)
-            arcpy.AddMessage('ERROR: {0}'.format(ex))
+            arcpy.AddMessage('ERROR: {0} \n'.format(ex))
 
     def getRExecutable(self, root_dir):
         """ Get R executable file path
@@ -1511,7 +1510,7 @@ class LandSimilarity(TargetingTool):
         """
         for i in xrange(1, len(parameters[0].values)):
             if arcpy.Exists(ras_temp_path + "ras_mask_" + str(i)):
-                arcpy.management.Delete(ras_temp_path + "ras_mask_" + str(i))  # Delete temporary files
+                super(LandSimilarity, self).deleteFile(ras_temp_path, "ras_mask_" + str(i))  # Delete temporary files
 
     def writeToCSV(self, in_fc_pt, out_csv):
         """ Write feature class table to CSV file
@@ -1608,7 +1607,7 @@ class LandSimilarity(TargetingTool):
             r_version = r_exe_file.rsplit("/", 3)[0]
             r_modEvA = r_version + "/library/modEvA"
             if not os.path.isdir(r_modEvA):
-                arcpy.AddError('Error: {0} package missing. Connect to the internet and run the tool again. Alternatively download and install "modEvA" package.'.format(r_modEvA))
+                arcpy.AddError('Error: {0} package missing. Connect to the internet and run the tool again. Alternatively download and install "modEvA" package. \n'.format(r_modEvA))
 
     def getRasterFile(self, in_val_raster):
         """ Get row statistics parameters from the value table
