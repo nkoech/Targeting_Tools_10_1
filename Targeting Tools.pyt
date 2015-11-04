@@ -874,6 +874,12 @@ class LandStatistics(TargetingTool):
             shutil.rmtree(ras_temp_path)
             return
         except Exception as ex:
+            #tb = sys.exc_info()[2]
+            #tbinfo = traceback.format_tb(tb)[0]
+            #pymsg = "PYTHON ERRORS:\nTraceback info:\n" + tbinfo + "\nError Info:\n" + str(sys.exc_info()[1])
+            #msgs = "ArcPy ERRORS:\n" + arcpy.GetMessages(2) + "\n"
+            #arcpy.AddError(pymsg)
+            #arcpy.AddError(msgs)
             arcpy.AddMessage('ERROR: {0} \n'.format(ex))
 
     def disableEnableParameter(self, parameters, val_1, val_2, boolean_val, enabled_val):
@@ -994,6 +1000,7 @@ class LandStatistics(TargetingTool):
                 cls_width = int(cls_width)  # Convert to integer
             arcpy.AddMessage("Creating reclassify range for {0} \n".format(in_raster))
             equal_interval_val = self.getEqualIntervalRemapVal(min_val, cls_width, num_cls)  # List of reclassify value lists
+            self.createEqualIntervalValLog(parameters, equal_interval_val)  # Create a log of equal interval values
             arcpy.AddMessage("Reclassifying {0} \n".format(in_raster))
             reclass_raster = self.reclassifyEqualInterval(in_raster, ras_temp_path, equal_interval_val)  # Reclassify input raster layer
         elif parameters[1].value == "RECLASS BY TABLE":
@@ -1011,6 +1018,7 @@ class LandStatistics(TargetingTool):
     def getEqualIntervalRemapVal(self, min_val, cls_width, num_cls):
         """ Create list of equal interval reclassify value lists
             Args:
+                parameters: Parameters from the tool.
                 min_val: Minimum input raster value
                 cls_width: Class width
                 num_cls: Number of classes
@@ -1019,7 +1027,6 @@ class LandStatistics(TargetingTool):
         """
         equal_interval_val = []
         prev_count = 0
-
         for i in xrange(1, num_cls + 1):
             remap_range_val = []
             for j in xrange(1):
@@ -1038,6 +1045,32 @@ class LandStatistics(TargetingTool):
             equal_interval_val.append(remap_range_val)
             prev_count = i
         return equal_interval_val
+
+    def createEqualIntervalValLog(self, parameters, interval_val):
+        """ Create a log of equal interval values used in reclassification of raster
+            Args:
+                parameters: Parameters from the tool.
+                interval_val: A list of list with reclassify values.
+            Return: None
+        """
+        out_dir = parameters[10].valueAsText.replace("\\", "/")  # Get output folder path
+        interval_log_txt = out_dir + "/equal_interval_log.txt"
+        t = time.localtime()
+        local_time = time.asctime(t)
+        with open(interval_log_txt, "w") as f:
+            f.write(" " + local_time + " \n")
+            f.write("\n")
+            f.write(" Equal Interval Values \n")
+            f.write(" ====================== \n")
+            f.write("\n")
+            f.write(" Number of Classes: " + str(len(interval_val)) + "\n")
+            f.write("\n")
+            f.write("  From Value            To Value            Output Value \n")
+            f.write(" ------------          ----------          -------------- \n")
+            f.write("\n")
+            for item in interval_val:
+                val = "  " + str(item[0]) + "                   " + str(item[1]) + "                 " + str(item[2])
+                f.write(val + "\n")
 
     def reclassifyEqualInterval(self, in_raster, ras_temp_path, remap_val):
         """ Reclassify input raster layer
