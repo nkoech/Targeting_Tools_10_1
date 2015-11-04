@@ -191,6 +191,17 @@ class TargetingTool(object):
                 if out_ras_1.valueAsText == out_ras_2.valueAsText:
                     out_ras_1.setErrorMessage("Duplicate output names are not allowed")
 
+    def deleteFile(self, ras_temp_path, *args):
+        """ Delete table, feature class or raster files
+            Args:
+                ras_temp_path: Temporary folder
+                *arg: File paths
+            Returns: None
+        """
+        for arg in args:
+            if arcpy.Exists(ras_temp_path + arg):
+                arcpy.management.Delete(ras_temp_path + arg)
+
 
 class LandSuitability(TargetingTool):
     def __init__(self):
@@ -844,7 +855,7 @@ class LandStatistics(TargetingTool):
             ras_temp_path = out_table + "/Temp/"
 
             if not os.path.exists(ras_temp_path):
-                os.makedirs(ras_temp_path)  # Create new directory
+                os.makedirs(ras_temp_path)  # Create temporary directory
 
             # Feature class rasterization and overlay
             if parameters[7].value:
@@ -1053,26 +1064,32 @@ class LandStatistics(TargetingTool):
         """
         in_val_raster = parameters[9]
         if ras_add:
-            arcpy.AddMessage("Initializing land statistics")
+            arcpy.AddMessage("Initializing land statistics \n")
+            arcpy.AddMessage("Adding {0} to {1} \n".format(ras_temp_path + "ras_multi", in_raster))
             arcpy.gp.Plus_sa(ras_temp_path + "ras_multi", in_raster, ras_temp_path + "ras_plus")  # Process: Plus
-            arcpy.management.Delete(ras_temp_path + "ras_multi")
-            if arcpy.Exists(ras_temp_path + "ras_reclass"):
-                arcpy.management.Delete(ras_temp_path + "ras_reclass")
+            super(LandStatistics, self).deleteFile(ras_temp_path, "ras_multi", "ras_reclass")  # Delete file
             in_raster = ras_temp_path + "ras_plus"
+            ras_copy = self.convertRasterPixelType(in_raster, ras_temp_path)  # Convert float/double precision to 32 bit integer
+            if ras_copy is not None:
+                in_raster = ras_copy
+            arcpy.AddMessage("Building raster attribute table for {0} \n".format(in_raster))
             arcpy.BuildRasterAttributeTable_management(in_raster, "Overwrite")  # Build attribute table for raster
             for row_count, ras_val_file, stats_type, data_val, out_table_name, table_short_name in self.getStatisticsRasterValue(in_val_raster, table_only=False):
                 stats_type_edit = self.formatStatisticsType(stats_type)
                 out_stat_table = ras_temp_path + out_table_name + ".dbf"
                 self.calculateZonalStatistics(in_raster, ras_val_file, stats_type_edit, data_val, out_stat_table)
-            arcpy.management.Delete(ras_temp_path + "ras_plus")
+            super(LandStatistics, self).deleteFile(ras_temp_path, "ras_plus", "ras_copy")
         else:
+            ras_copy = self.convertRasterPixelType(in_raster, ras_temp_path)
+            if ras_copy is not None:
+                in_raster = ras_copy
+            arcpy.AddMessage("Building raster attribute table for {0} \n".format(in_raster))
             arcpy.BuildRasterAttributeTable_management(in_raster, "Overwrite")  # Build attribute table for raster
             for row_count, ras_val_file, stats_type, data_val, out_table_name, table_short_name in self.getStatisticsRasterValue(in_val_raster, table_only=False):
                 stats_type_edit = self.formatStatisticsType(stats_type)
                 out_stat_table = ras_temp_path + out_table_name + ".dbf"
                 self.calculateZonalStatistics(in_raster, ras_val_file, stats_type_edit, data_val, out_stat_table)
-            if arcpy.Exists(ras_temp_path + "ras_reclass"):
-                arcpy.management.Delete(ras_temp_path + "ras_reclass")
+            super(LandStatistics, self).deleteFile(ras_temp_path, "ras_reclass", "ras_copy")
 
     def getStatisticsRasterValue(self, in_val_raster, table_only):
         """ Get row statistics parameters from the value table
@@ -1101,6 +1118,24 @@ class LandStatistics(TargetingTool):
                     yield row_count, ras_val_file, stats_type, data_val, out_table_name, table_short_name
             else:
                 yield row_count, out_table_name, table_short_name
+
+    def convertRasterPixelType(self, in_raster, ras_temp_path):
+        """ Convert float/double precision raster to 32 bit signed integer pixel type
+            Args:
+                in_raster: Input land suitability raster.
+                ras_temp_path: Temporary folder
+            Returns: A 32 bit signed integer raster.
+        """
+        ras_desc = arcpy.Describe(in_raster)
+        # Check raster pixel type and copy raster
+        if ras_desc.pixelType in {"F32", "F64"}:
+            in_raster_obj = arcpy.Raster(in_raster)  # Replace quote on path with null
+            minVal = in_raster_obj.minimum  # Minimum raster value
+            minVal -= 1
+            # Convert float/double precision raster to 32 bit signed integer
+            arcpy.AddMessage("Converting {0} to a 32 bit signed {1} \n".format(in_raster, ras_temp_path + "ras_copy"))
+            arcpy.CopyRaster_management(in_raster, ras_temp_path + "ras_copy", "", "", str(minVal), "NONE", "NONE", "32_BIT_SIGNED", "NONE", "NONE")
+            return ras_temp_path + "ras_copy"
 
     def formatStatisticsType(self, stats_type):
         """ Format statistics type string to the right format
