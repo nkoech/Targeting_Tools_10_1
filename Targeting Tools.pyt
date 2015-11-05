@@ -217,7 +217,7 @@ class LandSuitability(TargetingTool):
 
     def getParameterInfo(self):
         """Define parameter definitions"""
-        self.parameters[0].columns = [['Raster Layer', 'Raster'], ['Double', 'Min Value'], ['Double', 'Optimal From'], ['Double', 'Max Value'], ['Double', 'Optimal To'], ['String', 'Combine-Yes/No']]
+        self.parameters[0].columns = [['Raster Layer', 'Raster'], ['Double', 'Min Value'], ['Double', 'Optimal From'], ['Double', 'Optimal To'], ['Double', 'Max Value'], ['String', 'Combine-Yes/No']]
         return self.parameters
 
     def updateParameters(self, parameters):
@@ -255,28 +255,28 @@ class LandSuitability(TargetingTool):
         """
         # End of value table, now update value table last row with new column data
         if opt_from_val == "#" and opt_to_val == "#" and ras_combine == "#":
-            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, "#", maxVal, "#", "#"))
+            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, "#", "#", maxVal, "#"))
             in_raster.value = vtab.exportToString()
         elif opt_from_val != "#" and opt_to_val == "#" and ras_combine == "#":
-            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, opt_from_val, maxVal, "#", "#"))
+            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, opt_from_val, "#", maxVal, "#"))
             in_raster.value = vtab.exportToString()
         elif opt_from_val == "#" and opt_to_val != "#" and ras_combine == "#":
-            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, "#", maxVal, opt_to_val, "#"))
+            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, "#", opt_to_val, maxVal, "#"))
             in_raster.value = vtab.exportToString()
         elif opt_from_val == "#" and opt_to_val == "#" and ras_combine != "#":
-            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, "#", maxVal, "#", ras_combine))
+            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, "#", "#", maxVal, ras_combine))
             in_raster.value = vtab.exportToString()
         elif opt_from_val != "#" and opt_to_val != "#" and ras_combine == "#":
-            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, opt_from_val, maxVal, opt_to_val, "#"))
+            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, opt_from_val, opt_to_val, maxVal, "#"))
             in_raster.value = vtab.exportToString()
         elif opt_from_val == "#" and opt_to_val != "#" and ras_combine != "#":
-            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, "#", maxVal, opt_to_val, ras_combine))
+            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, "#", opt_to_val, maxVal, ras_combine))
             in_raster.value = vtab.exportToString()
         elif opt_from_val != "#" and opt_to_val == "#" and ras_combine != "#":
-            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, opt_from_val, maxVal, "#", ras_combine))
+            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, opt_from_val, "#", maxVal, ras_combine))
             in_raster.value = vtab.exportToString()
         elif opt_from_val != "#" and opt_to_val != "#" and ras_combine != "#":
-            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, opt_from_val, maxVal, opt_to_val, ras_combine))
+            vtab.addRow('{0} {1} {2} {3} {4} {5}'.format(ras_file, minVal, opt_from_val, opt_to_val, maxVal, ras_combine))
             in_raster.value = vtab.exportToString()
 
     def updateMessages(self, parameters):
@@ -613,8 +613,8 @@ class LandSuitability(TargetingTool):
             ras_file = ras_file.replace("\\","/")
             minVal = lst_val[1]  # Minimum raster value
             opt_from_val = lst_val[2]  # Get crop optimum value from
-            maxVal = lst_val[3]  # Maximum raster value
-            opt_to_val = lst_val[4]  # Get crop optimum value to
+            opt_to_val = lst_val[3]  # Get crop optimum value to
+            maxVal = lst_val[4]  # Maximum raster value
             ras_combine = lst_val[5]  # Get combine option
             if ras_max_min:
                 if minVal == "#" or maxVal == "#" or ras_combine == "#":
