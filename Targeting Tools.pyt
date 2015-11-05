@@ -207,7 +207,9 @@ class LandSuitability(TargetingTool):
     def __init__(self):
         """Define the tool (tool name is the name of the class)."""
         self.label = "Land Suitability"
-        self.description = ""
+        self.description = "Given a set of raster data and user optimal values, the Land Suitability tool determines the" \
+                           " most suitable place to carry out an activity. In agriculture, it could be used to identify" \
+                           " places with the best biophysical and socioeconomic conditions for a certain crop to do well."
         self.canRunInBackground = True
         self.parameters = [
             parameter("Input raster", "in_raster", "Value Table"),
