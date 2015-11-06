@@ -1489,7 +1489,7 @@ class LandSimilarity(TargetingTool):
             self.createRScript(parameters, ras_temp_path)  # Create R script
             self.runCommand(r_exe_path, ras_temp_path)  # Run R command
             self.asciiToRasterConversion(parameters, ras_temp_path)  # ASCII to raster conversion
-            #shutil.rmtree(ras_temp_path)
+            shutil.rmtree(ras_temp_path)
             return
         except Exception as ex:
             #tb = sys.exc_info()[2]
