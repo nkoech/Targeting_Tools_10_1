@@ -813,6 +813,7 @@ class LandStatistics(TargetingTool):
             table_short_char = ("_")
             prev_ras_val = []
             prev_table_short_val = []
+            prev_table_name_val = []
             for row_count, ras_val_file, stats_type, data_val, out_table_name, table_short_name in self.getStatisticsRasterValue(in_val_raster, table_only=False):
                 # Table name validation
                 for str_char in out_table_name:
@@ -835,12 +836,19 @@ class LandStatistics(TargetingTool):
                         in_val_raster.setErrorMessage("Ignore NoData field expects \"Yes\" or \"No\" input value")
                 # Field identifier validation
                 if len(in_val_raster.valueAsText.split(";")) > 1:
+                    # Validated field identifier input
                     self.fielIdValidator(table_short_name, in_val_raster, table_short_char)  # Value table field identifier validator
                     if len(prev_table_short_val) > 0:
                         super(LandStatistics, self).uniqueValueValidator(prev_table_short_val, table_short_name, in_val_raster, field_id=True)
                         prev_table_short_val.append(table_short_name)
                     else:
                         prev_table_short_val.append(table_short_name)
+                    # Validated output table name input
+                    if len(prev_table_name_val) > 0:
+                        super(LandStatistics, self).uniqueValueValidator(prev_table_name_val, out_table_name, in_val_raster, field_id=True)
+                        prev_table_name_val.append(out_table_name)
+                    else:
+                        prev_table_name_val.append(out_table_name)
         return
 
     def execute(self, parameters, messages):
