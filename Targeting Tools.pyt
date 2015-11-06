@@ -13,7 +13,7 @@
                 Requires Spatial Analyst extension
 
     Created:    May 2015
-    Modified:   September 2015
+    Modified:   November 2015
 """
 
 import os, sys, csv, re, time, arcpy, shutil, ntpath, subprocess, traceback
