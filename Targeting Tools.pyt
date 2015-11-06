@@ -695,7 +695,7 @@ class LandStatistics(TargetingTool):
             parameter("To value field", "to_val_field", "Field", parameterType='Optional'),
             parameter("New value field", "new_val_field", "Field", parameterType='Optional'),
             parameter("Input value feature class", "in_val_fcls", "Feature Layer", parameterType='Optional'),
-            parameter("Feature name field", "fval_field", "String", parameterType="Optional"),
+            parameter("Feature field name", "fval_field", "String", parameterType="Optional"),
             parameter("Input value raster", "in_val_ras", "Value Table"),
             parameter("Output Folder", "out_table", "Workspace", direction="input")
         ]
