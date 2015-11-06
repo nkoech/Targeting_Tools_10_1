@@ -1144,7 +1144,7 @@ class LandStatistics(TargetingTool):
             if not table_only:
                 if stats_type == "#" or data_val == "#" or out_table_name == "#":
                     stats_type = "ALL"
-                    data_val = "No"
+                    data_val = "Yes"
                     out_table_name = ntpath.basename(ras_val_file)  # Get input raster file name
                     out_table_name = os.path.splitext(out_table_name)[0].rstrip()  # Get input raster file name without extension
                     yield row_count, ras_val_file, stats_type, data_val, out_table_name, table_short_name
