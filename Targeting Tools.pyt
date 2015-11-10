@@ -689,7 +689,7 @@ class LandStatistics(TargetingTool):
         """Define the tool (tool name is the name of the class)."""
         self.label = "Land Statistics"
         self.description = ""
-        self.canRunInBackground = False
+        self.canRunInBackground = True
 
         self.parameters = [
             parameter("Input raster zone data", "in_raszone", "Raster Layer"),
@@ -1385,7 +1385,7 @@ class LandSimilarity(TargetingTool):
         """Define the tool (tool name is the name of the class)."""
         self.label = "Land Similarity"
         self.description = ""
-        self.canRunInBackground = False
+        self.canRunInBackground = True
         self.parameters = [
             parameter("Input raster", "in_raster", "Raster Layer", multiValue=True),
             parameter("Input point layer", "in_point", "Feature Layer"),
