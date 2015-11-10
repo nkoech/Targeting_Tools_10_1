@@ -222,6 +222,11 @@ class LandSuitability(TargetingTool):
         self.parameters[0].columns = [['Raster Layer', 'Raster'], ['Double', 'Min Value'], ['Double', 'Optimal From'], ['Double', 'Optimal To'], ['Double', 'Max Value'], ['String', 'Combine-Yes/No']]
         return self.parameters
 
+    def isLicensed(self):
+        """ Set whether tool is licensed to execute."""
+        spatialAnalystCheckedOut = super(LandSuitability, self).isLicensed()  # Check availability of Spatial Analyst
+        return spatialAnalystCheckedOut
+
     def updateParameters(self, parameters):
         """ Modify the values and properties of parameters before internal
             validation is performed.  This method is called whenever a parameter
@@ -716,6 +721,11 @@ class LandStatistics(TargetingTool):
         self.parameters[7].filter.list = ["Polygon"]  # Geometry type filter
         self.parameters[9].columns = [['Raster Layer', 'Raster'], ['String', 'Statistics Type'], ['String', 'Ignore NoData'], ['String', 'Output Table Name'], ['String', 'Field Identifier']]
         return self.parameters
+
+    def isLicensed(self):
+        """ Set whether tool is licensed to execute."""
+        spatialAnalystCheckedOut = super(LandStatistics, self).isLicensed()  # Check availability of Spatial Analyst
+        return spatialAnalystCheckedOut
 
     def updateParameters(self, parameters):
         """ Modify the values and properties of parameters before internal
@@ -1390,6 +1400,11 @@ class LandSimilarity(TargetingTool):
         self.parameters[1].filter.list = ["Point"]  # Geometry type filter
         return self.parameters
 
+    def isLicensed(self):
+        """ Set whether tool is licensed to execute."""
+        spatialAnalystCheckedOut = super(LandSimilarity, self).isLicensed()  # Check availability of Spatial Analyst
+        return spatialAnalystCheckedOut
+
     def updateParameters(self, parameters):
         """ Modify the values and properties of parameters before internal
             validation is performed.  This method is called whenever a parameter
@@ -1528,21 +1543,72 @@ class LandSimilarity(TargetingTool):
             Returns: None
         """
         in_val_raster = parameters[0]
+        num_rows = len(in_val_raster.values)  # The number of rows in the table
+        first_in_raster = ""
         sample_in_ras = []
         for row_count, in_ras_file in self.getRasterFile(in_val_raster):
             i = row_count + 1
             if extent is not None:
                 arcpy.AddMessage("Clipping {0} \n".format(ntpath.basename(in_ras_file)))
                 arcpy.Clip_management(in_ras_file, "{0} {1} {2} {3}".format(extent.XMin, extent.YMin, extent.XMax, extent.YMax), ras_temp_path + "ras_mask_" + str(i), in_fc, "#", "ClippingGeometry")
-                sample_in_ras.append(ras_temp_path + "ras_mask_" + str(i))
-                arcpy.AddMessage("Converting {0} to ASCII file {1} \n".format(ras_temp_path + "ras_mask_" + str(i), ras_temp_path + "tempAscii_" + str(i) + ".asc"))
-                arcpy.RasterToASCII_conversion(ras_temp_path + "ras_mask_" + str(i), ras_temp_path + "tempAscii_" + str(i) + ".asc")
+                if num_rows > 1:
+                    if i == 1:
+                        first_in_raster = ras_temp_path + "ras_mask_" + str(i)
+                in_ras_mask = ras_temp_path + "ras_mask_" + str(i)
+                sample_ras = self.convertRasterToASCII(num_rows, ras_temp_path, i, first_in_raster, in_ras_mask)  # Convert raster to ASCII
+                sample_in_ras.append(sample_ras)
             else:
-                sample_in_ras.append(in_ras_file)
-                arcpy.AddMessage("Converting {0} to ASCII file {1} \n".format(in_ras_file, ras_temp_path + "tempAscii_" + str(i) + ".asc"))
-                arcpy.RasterToASCII_conversion(in_ras_file, ras_temp_path + "tempAscii_" + str(i) + ".asc")
+                if num_rows > 1:
+                    if i == 1:
+                        first_in_raster = in_ras_file
+                sample_ras = self.convertRasterToASCII(num_rows, ras_temp_path, i, first_in_raster, in_ras_file)
+                sample_in_ras.append(sample_ras)
         arcpy.AddMessage("Creating sample values \n")
         arcpy.gp.Sample_sa(sample_in_ras, in_fc_pt, ras_temp_path + "temp.dbf", "NEAREST")  # Process: Sample
+
+    def convertRasterToASCII(self, num_rows, ras_temp_path, i, first_in_raster, in_raster):
+        """ Converts raster to ASCII
+            Args:
+                num_rows: Number of input rasters
+                ras_temp_path: Temporary folder
+                i: Raster counter
+                first_in_raster: First input raster
+                in_raster: Raster with applied environment settings
+            Returns:
+                sample_ras: Raster to be used in creating a cell value sample table
+        """
+        sample_ras = ""
+        if num_rows > 1:
+            if i == 1:
+                sample_ras = first_in_raster
+                arcpy.AddMessage("Converting {0} to ASCII file {1} \n".format(first_in_raster, ras_temp_path + "tempAscii_" + str(i) + ".asc"))
+                arcpy.RasterToASCII_conversion(first_in_raster, ras_temp_path + "tempAscii_" + str(i) + ".asc")
+            else:
+                in_mem_raster = self.applyEnvironment(first_in_raster, in_raster)
+                in_mem_raster.save(ras_temp_path + "ras_envset_" + str(i))  # Save memory raster to disk
+                sample_ras = ras_temp_path + "ras_envset_" + str(i)
+                arcpy.AddMessage("Converting {0} to ASCII file {1} \n".format(ras_temp_path + "ras_envset_" + str(i), ras_temp_path + "tempAscii_" + str(i) + ".asc"))
+                arcpy.RasterToASCII_conversion(ras_temp_path + "ras_envset_" + str(i), ras_temp_path + "tempAscii_" + str(i) + ".asc")
+        else:
+            sample_ras = in_raster
+            arcpy.AddMessage("Converting {0} to ASCII file {1} \n".format(in_raster, ras_temp_path + "tempAscii_" + str(i) + ".asc"))
+            arcpy.RasterToASCII_conversion(in_raster, ras_temp_path + "tempAscii_" + str(i) + ".asc")
+        return sample_ras
+
+    def applyEnvironment(self, first_in_raster, in_raster):
+        """ Apply environment settings
+            Args:
+                first_in_raster: First input raster
+                in_raster: Raster with applied environment settings
+            Returns: None
+        """
+        arcpy.env.extent = first_in_raster
+        arcpy.env.cellSize = first_in_raster
+        arcpy.env.outputCoordinateSystem = first_in_raster
+        arcpy.env.snapRaster = first_in_raster
+        arcpy.AddMessage("Applying environment settings for {0}".format(in_raster))
+        in_raster = arcpy.Raster(in_raster)
+        return arcpy.sa.ApplyEnvironment(in_raster)
 
     def deleteTempFile(self, parameters, ras_temp_path):
         """ Delete temporary files
@@ -1554,6 +1620,8 @@ class LandSimilarity(TargetingTool):
         for i in xrange(1, len(parameters[0].values)):
             if arcpy.Exists(ras_temp_path + "ras_mask_" + str(i)):
                 super(LandSimilarity, self).deleteFile(ras_temp_path, "ras_mask_" + str(i))  # Delete temporary files
+            if arcpy.Exists(ras_temp_path + "ras_envset_" + str(i)):
+                super(LandSimilarity, self).deleteFile(ras_temp_path, "ras_envset_" + str(i))  # Delete temporary files
 
     def writeToCSV(self, in_fc_pt, out_csv):
         """ Write feature class table to CSV file
