@@ -470,8 +470,9 @@ class LandSuitability(TargetingTool):
             arcpy.AddMessage("Creating data input log \n")
             self.createParametersLog(out_ras, ras_max_min, in_raster)  # create parameters log file
             arcpy.AddMessage("Deleting temporary folder \n")
-            shutil.rmtree(ras_temp_path)
+            shutil.rmtree(ras_temp_path)  # Delete folder
             super(LandSuitability, self).loadOutput(out_ras)  # Load output to current MXD
+            arcpy.RefreshCatalog(ntpath.dirname(out_ras))  # Refresh folder
             return
         except Exception as ex:
             arcpy.AddMessage('ERROR: {0} \n'.format(ex))
@@ -914,7 +915,8 @@ class LandStatistics(TargetingTool):
                 in_raster = self.reclassifyRaster(parameters, ras_temp_path)
                 self.zonalStatisticsInit(in_raster, ras_temp_path, parameters, ras_add=False)
                 self.configZonalStatisticsTable(parameters, ras_temp_path, out_table, in_vector=False)
-            shutil.rmtree(ras_temp_path)
+            shutil.rmtree(ras_temp_path)  # delete folder
+            arcpy.RefreshCatalog(out_table)  # Refresh folder
             return
         except Exception as ex:
             #tb = sys.exc_info()[2]
@@ -1481,6 +1483,11 @@ class LandSimilarity(TargetingTool):
                 super(LandSimilarity, self).setFcSpatialWarning(parameters[1], all_ras_ref[-1], prev_input)  # Set feature class spatial warning
             if parameters[2].value and parameters[2].altered:
                 super(LandSimilarity, self).setFcSpatialWarning(parameters[2], all_ras_ref[-1], prev_input)
+        if parameters[1].value and parameters[1].altered:
+            in_fc = parameters[1].valueAsText.replace("\\", "/")
+            result = arcpy.GetCount_management(in_fc)  # Get number of features in the input feature class
+            if int(result.getOutput(0)) <= 1:
+                parameters[1].setWarningMessage("Input point layer has a single feature. MESS will NOT be calculated.")
         if parameters[3].value and parameters[3].altered:
             r_exe_path = parameters[3].valueAsText
             if not r_exe_path.endswith(("\\bin\\R.exe", "\\bin\\x64\\R.exe", "\\bin\\i386\\R.exe")):
@@ -1543,6 +1550,7 @@ class LandSimilarity(TargetingTool):
                 elif arcpy.Exists(out_mess_ras):
                     out_ras = out_mess_ras
             super(LandSimilarity, self).loadOutput(out_ras)  # Load output to current MXD
+            arcpy.RefreshCatalog(ntpath.dirname(out_mnobis_ras))  # Refresh folder
             return
         except Exception as ex:
             #tb = sys.exc_info()[2]
