@@ -119,16 +119,34 @@ class TargetingTool(object):
                     tool_para.setWarningMessage("{0} file is a duplicate of {1}".format(str_val, item))
 
     def getInputFc(self, parameter):
-        """ Gets the input MXD
+        """ Gets the input feature class
             Args:
-                parameters: Tool parameters object
-            Return:
+                parameter: Tool parameters object
+            Returns:
                 in_fc_file: Input feature class file
                 in_fc: Input feature class parameter
         """
         in_fc = parameter.valueAsText.replace("\\", "/")
         in_fc_file = ntpath.basename(in_fc)
         return {"in_fc": in_fc, "in_fc_file": in_fc_file}
+
+    def getLayerDataSource(self, parameter):
+        """ Gets current MXD layer data source
+            Args:
+                parameter: Tool parameters object
+            Returns:
+                in_fc_pt: Layer data source
+        """
+        in_fc_pt = ""
+        mxd = arcpy.mapping.MapDocument("CURRENT")
+        param_as_text = parameter.valueAsText.replace("\\", "/")
+        if arcpy.mapping.ListLayers(mxd):  # Check if a layer exists
+            for lyr in arcpy.mapping.ListLayers(mxd):
+                if lyr.supports("datasetName"):
+                    if lyr.datasetName == param_as_text:
+                        if lyr.supports("dataSource"):
+                            in_fc_pt = lyr.dataSource.replace("\\", "/")
+        return in_fc_pt
 
     def formatValueTableData(self, lst):
         """ Clean value table data
@@ -1385,7 +1403,7 @@ class LandSimilarity(TargetingTool):
         """Define the tool (tool name is the name of the class)."""
         self.label = "Land Similarity"
         self.description = ""
-        self.canRunInBackground = True
+        self.canRunInBackground = False
         self.parameters = [
             parameter("Input raster", "in_raster", "Raster Layer", multiValue=True),
             parameter("Input point layer", "in_point", "Feature Layer"),
@@ -1485,8 +1503,11 @@ class LandSimilarity(TargetingTool):
                 os.makedirs(ras_temp_path)
             # Copy point layer to temporary directory
             in_fc_pt = parameters[1].valueAsText.replace("\\", "/")
-            arcpy.Copy_management(in_fc_pt, ras_temp_path + ntpath.basename(in_fc_pt))
-            in_fc_pt = ras_temp_path + ntpath.basename(in_fc_pt)
+            if os.path.isfile(in_fc_pt):
+                in_fc_pt = self.copyDataset(ras_temp_path, in_fc_pt, in_fc_pt)  # Copy dataset from source to destination
+            else:
+                in_fc_pt = super(LandSimilarity, self).getLayerDataSource(parameters[1])  # Get point layer data source
+                in_fc_pt = self.copyDataset(ras_temp_path, in_fc_pt, in_fc_pt)
 
             # raster sample creation
             if parameters[2].value:
@@ -1514,6 +1535,23 @@ class LandSimilarity(TargetingTool):
             #arcpy.AddError(pymsg)
             #arcpy.AddError(msgs)
             arcpy.AddMessage('ERROR: {0} \n'.format(ex))
+
+    def copyDataset(self, ras_temp_path, source_file, new_file):
+        """ Copy dataset from one source to another
+            Args:
+                ras_temp_path: Temporary folder
+                source_file: Source file
+                new_file: New file
+            Returns:
+                new_file: New file path
+        """
+        if new_file is not None:
+            new_file = ntpath.basename(new_file)
+        else:
+            new_file = ntpath.basename(source_file)
+        arcpy.Copy_management(source_file, ras_temp_path + new_file)  # Copy point layer to a temporary directory
+        new_file = ras_temp_path + new_file
+        return new_file
 
     def getRExecutable(self, root_dir):
         """ Get R executable file path
