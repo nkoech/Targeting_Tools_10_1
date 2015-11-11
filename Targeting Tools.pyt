@@ -220,6 +220,24 @@ class TargetingTool(object):
             if arcpy.Exists(ras_temp_path + arg):
                 arcpy.management.Delete(ras_temp_path + arg)
 
+    def loadOutput(self, out_ras):
+        """ Loads output to the current MXD
+            Args:
+                parameters: Tool parameters object
+                out_ras: Raster dataset - string or list
+            Return: None
+        """
+        mxd = arcpy.mapping.MapDocument("CURRENT")
+        df = arcpy.mapping.ListDataFrames(mxd, "*")[0]  # Get the first data frame
+        # Load raster dataset to the current mxd
+        lyr = ""
+        if isinstance(out_ras, list):  # Check if it is a list
+            for data_obj in out_ras:
+                lyr = arcpy.mapping.Layer(data_obj)
+        else:
+            lyr = arcpy.mapping.Layer(out_ras)
+        arcpy.mapping.AddLayer(df, lyr, "AUTO_ARRANGE")
+
 
 class LandSuitability(TargetingTool):
     def __init__(self):
@@ -453,7 +471,7 @@ class LandSuitability(TargetingTool):
             self.createParametersLog(out_ras, ras_max_min, in_raster)  # create parameters log file
             arcpy.AddMessage("Deleting temporary folder \n")
             shutil.rmtree(ras_temp_path)
-            self.loadOutput(parameters, out_ras)  # Load output to current MXD
+            super(LandSuitability, self).loadOutput(out_ras)  # Load output to current MXD
             return
         except Exception as ex:
             arcpy.AddMessage('ERROR: {0} \n'.format(ex))
@@ -675,19 +693,6 @@ class LandSuitability(TargetingTool):
             for ras_file, minVal, maxVal, opt_from_val, opt_to_val, ras_combine, row_count in self.getRowValue(in_raster, ras_max_min):
                 new_line = str(row_count) + ": " + ras_file + " ; " + minVal + " ; " + opt_from_val + " ; " + maxVal + " ; " + opt_to_val + " ; " + ras_combine
                 f.write(new_line + "\n")
-
-    def loadOutput(self, parameters, out_ras):
-        """ Loads output to the current MXD
-            Args:
-                parameters: Tool parameters object
-                out_ras: Land suitability layer
-            Return: None
-        """
-        mxd = arcpy.mapping.MapDocument("CURRENT")
-        df = arcpy.mapping.ListDataFrames(mxd, "*")[0]  # Get the first data frame
-        # Load raster output
-        lyr = arcpy.mapping.Layer(out_ras)
-        arcpy.mapping.AddLayer(df, lyr, "AUTO_ARRANGE")
 
     def createFcLayer(self, out_fc):
         """ Handles creation of feature class layer
@@ -1496,6 +1501,7 @@ class LandSimilarity(TargetingTool):
         try:
             r_exe_path = parameters[3].valueAsText
             out_mnobis_ras = parameters[4].valueAsText.replace("\\", "/")  # Get mahalanobis output
+            out_mess_ras = parameters[5].valueAsText.replace("\\", "/")  # Get mess output
             ras_temp_path = ntpath.dirname(out_mnobis_ras)  # Get path without file name
             ras_temp_path += "/Temp/"
             # Create temporary directory if it doesn't exist
@@ -1525,7 +1531,18 @@ class LandSimilarity(TargetingTool):
             self.createRScript(parameters, ras_temp_path)  # Create R script
             self.runCommand(r_exe_path, ras_temp_path)  # Run R command
             self.asciiToRasterConversion(parameters, ras_temp_path)  # ASCII to raster conversion
-            shutil.rmtree(ras_temp_path)
+            shutil.rmtree(ras_temp_path)  # Delete directory
+
+            # Get raster and load to the current mxd
+            out_ras = ""
+            if arcpy.Exists(out_mnobis_ras) and arcpy.Exists(out_mess_ras):
+                out_ras = [out_mnobis_ras, out_mess_ras]
+            else:
+                if arcpy.Exists(out_mnobis_ras):
+                    out_ras = out_mnobis_ras
+                elif arcpy.Exists(out_mess_ras):
+                    out_ras = out_mess_ras
+            super(LandSimilarity, self).loadOutput(out_ras)  # Load output to current MXD
             return
         except Exception as ex:
             #tb = sys.exc_info()[2]
