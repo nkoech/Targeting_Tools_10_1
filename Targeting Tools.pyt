@@ -1364,7 +1364,7 @@ class LandStatistics(TargetingTool):
             arcpy.CalculateField_management(first_stat_table, "LAND_RANK", "Right([VALUE] , 3)", "VB", "")
             # Add values to table
             arcpy.AddMessage("Adding ID values to new fields in {0} \n".format(first_stat_table))
-            self.addValuesZonalStatisticsTable(ras_poly, first_stat_table)
+            self.addValuesZonalStatisticsTable(in_fc_field, ras_poly, first_stat_table)
             arcpy.AddMessage("Moving file {0} to {1} \n".format(first_stat_table, combined_stat_table))
             self.moveFile(first_stat_table, combined_stat_table)
         else:
@@ -1382,21 +1382,21 @@ class LandStatistics(TargetingTool):
         arcpy.AddField_management(first_stat_table, "POLY_VAL", "LONG")
         arcpy.AddField_management(first_stat_table, "LAND_RANK", "LONG")
 
-    def addValuesZonalStatisticsTable(self, ras_poly, out_stat_table):
+    def addValuesZonalStatisticsTable(self, in_fc_field, ras_poly, out_stat_table):
         """ Copy field values from one table to another
             Args:
+                in_fc_field: Input feature class field name
                 ras_poly: Rasterized polygon
-                ras_temp_path: Temporary folder
                 out_stat_table: Output zonal statistics table
         """
         with arcpy.da.SearchCursor(ras_poly, ["VALUE"]) as cursor:
             for row in cursor:
                 sql_exp1 = "VALUE = " + str(row[0])  # SQL expression
                 sql_exp2 = "POLY_VAL = " + str(row[0])
-                with arcpy.da.SearchCursor(ras_poly, ["ADM2_NAME"], sql_exp1) as cursor2:
+                with arcpy.da.SearchCursor(ras_poly, [in_fc_field], sql_exp1) as cursor2:
                     for row2 in cursor2:
                         update_val = row2[0]
-                        with arcpy.da.UpdateCursor(out_stat_table, ["ADM2_NAME"], sql_exp2) as cursor3:  # Update values in the second table
+                        with arcpy.da.UpdateCursor(out_stat_table, [in_fc_field], sql_exp2) as cursor3:  # Update values in the second table
                             for row3 in cursor3:
                                 row3[0] = update_val
                                 cursor3.updateRow(row3)
