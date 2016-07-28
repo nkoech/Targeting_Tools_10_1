@@ -1,7 +1,7 @@
 Targeting Tools
 ===============
 
-Targeting toolbox is an ArcGIS toolbox (.pyt) purely developed using Python programming language. The toolbox has two tools that were developed with an aim of identifying land that is suitable for a certain crop to grow based on user criteria. The two tools are:
+Targeting toolbox is an ArcGIS toolbox (.pyt) purely developed using Python programming language. The toolbox has three tools that were developed with an aim of identifying land that is suitable for a certain crop to grow based on user criteria. The three tools are:
 
 * **Land Suitability:** This tool can be used to identify areas that ,are suitable for planting a certain type of crop as per the user criteria. Please click on the **Help Tool button** once you install the toolbox in ArcGIS environment to get information on how to use it.
 
