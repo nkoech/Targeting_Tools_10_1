@@ -238,6 +238,20 @@ class TargetingTool(object):
             lyr = arcpy.mapping.Layer(out_ras)
         arcpy.mapping.AddLayer(df, lyr, "AUTO_ARRANGE")
 
+    def calculateStatistics(self, in_raster):
+        """
+        Gets raster maximum value
+        :param in_raster: Input raster absolute path
+        :return: A raster with statistics calculated
+        :rtype: Integer or float
+        """
+        if arcpy.Exists(in_raster):
+            try:
+                arcpy.GetRasterProperties_management(in_raster, "STD")
+            except arcpy.ExecuteError:
+                arcpy.CalculateStatistics_management(in_raster, "1", "1", "", "OVERWRITE")
+            return arcpy.Raster(in_raster)
+
 
 class LandSuitability(TargetingTool):
     def __init__(self):
@@ -662,7 +676,7 @@ class LandSuitability(TargetingTool):
             ras_combine = lst_val[5]  # Get combine option
             if ras_max_min:
                 if minVal == "#" or maxVal == "#" or ras_combine == "#":
-                    paramInRaster = arcpy.Raster(ras_file.replace("'", ""))  # Replace quote on path with null
+                    paramInRaster = super(LandSuitability, self).calculateStatistics(ras_file.replace("'", ""))
                     minVal = paramInRaster.minimum  # Minimum raster value
                     maxVal = paramInRaster.maximum  # Maximum raster value
                     ras_combine = "No"
@@ -1037,8 +1051,9 @@ class LandStatistics(TargetingTool):
         reclass_raster = ""
         in_raster = parameters[0].valueAsText.replace("\\","/")
         if parameters[1].value == "EQUAL INTERVAL":
-            min_val = arcpy.Raster(in_raster).minimum  # Minimum input raster value
-            max_val = arcpy.Raster(in_raster).maximum  # Maximum input raster value
+            stat_raster = super(LandStatistics, self).calculateStatistics(in_raster)
+            min_val = arcpy.Raster(stat_raster).minimum  # Minimum input raster value
+            max_val = arcpy.Raster(stat_raster).maximum  # Maximum input raster value
             num_cls = parameters[2].value
             cls_width = float(max_val - min_val)/num_cls  # Class width
             if cls_width.is_integer():
@@ -1206,7 +1221,7 @@ class LandStatistics(TargetingTool):
         ras_desc = arcpy.Describe(in_raster)
         # Check raster pixel type and copy raster
         if ras_desc.pixelType in {"F32", "F64"}:
-            in_raster_obj = arcpy.Raster(in_raster)  # Replace quote on path with null
+            in_raster_obj = super(LandStatistics, self).calculateStatistics(in_raster)
             minVal = in_raster_obj.minimum  # Minimum raster value
             minVal -= 1
             # Convert float/double precision raster to 32 bit signed integer
