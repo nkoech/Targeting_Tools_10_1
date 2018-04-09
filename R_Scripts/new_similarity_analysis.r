@@ -26,6 +26,7 @@ readAscii<- function(inFile) {
   #   asciiData: A list of ascii header and grid data
   
   asciiData <- list()
+  print(paste("Reading.... ", inFile, sep=""))
   for (i in 0:6) {
     if (i != 6){
       headerData <- scan(file = inFile, what = 'character', skip = i, nlines = 1, quiet=T)
@@ -40,31 +41,23 @@ readAscii<- function(inFile) {
   return(asciiData)
 }
 
-similarityAnalysis <- function(numFiles, dirPath) {
+similarityAnalysis <- function(totalFiles, dirPath) {
   # Performs similarity analysis
   # Args:
-  #   numFiles: Number of files to be processed
+  #   totalFiles: Total number of files to be processed
   #   fileDir: Path to where files are located
   # Return: None
   
   installPackage(c("raster", "rgdal", "modEvA")) # Install/add packages
-  print('Starting similarity anlysi...')
   
+  print('Starting similarity anlysis...')
   dataTable <- data.frame() # Create empty data frame
-  for (i in 1:numFiles){
-    readAscii(paste(dirPath, "tempAscii_", i, ".asc", sep = ""))
+  for (i in 1:totalFiles){
+    asciiData <- readAscii(paste(dirPath, "tempAscii_", i, ".asc", sep = ""))
+    if (i != 1) {
+      dataTable = cbind(dataTable, asciiData$gridData)
+    } else	{
+      dataTable = asciiData$gridData
+    }
   }
-  
-  
-  # for (cnt in 1:cntRaster)	{
-  #   inAscii = readAscii(paste(outFolder, "tempAscii_", cnt, ".asc", sep = ""))
-  #   if (cnt != 1) {
-  #     dataTable = cbind(dataTable,inAscii$gridData)
-  #   }
-  #   else	{
-  #     dataTable = inAscii$gridData
-  #   }
-  # }
-  
-  
 }
