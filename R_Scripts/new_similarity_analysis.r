@@ -41,6 +41,21 @@ readAscii<- function(inFile) {
   return(asciiData)
 }
 
+calculateMahalanobis <- function (outFolder, df, asciiData){
+  # Caculate mahalanobis distance 
+  # Args:
+  #   outFolder: Output path
+  #   df: Data frame with grid data as ASCII
+  #   asciidata: ASCII file with header and gid data
+  # Return: None
+  
+  threshold <- read.csv(paste(outFolder, "temp.csv", sep = ""))
+  mn <- sapply(threshold[,7:(7+cntRaster-1)], mean)
+  print("Calculating Mahalanobis Distance")
+  asciiData$gridData <- mahalanobis(df, mn, cov(df, use = "complete.obs"))
+  writeAscii(paste(outFolder, "MahalanobisDist.asc", sep = ""), asciiData)
+}
+
 similarityAnalysis <- function(totalFiles, dirPath) {
   # Performs similarity analysis
   # Args:
@@ -48,16 +63,17 @@ similarityAnalysis <- function(totalFiles, dirPath) {
   #   fileDir: Path to where files are located
   # Return: None
   
-  installPackage(c("raster", "rgdal", "modEvA")) # Install/add packages
-  
+  installPackage(c("raster", "rgdal", "modEvA"))
   print('Starting similarity anlysis...')
-  dataTable <- data.frame() # Create empty data frame
+  df <- data.frame()
+  asciiData <- list()
   for (i in 1:totalFiles){
     asciiData <- readAscii(paste(dirPath, "tempAscii_", i, ".asc", sep = ""))
     if (i != 1) {
-      dataTable = cbind(dataTable, asciiData$gridData)
+      df <- cbind(df, asciiData$gridData)
     } else	{
-      dataTable = asciiData$gridData
+      df <- asciiData$gridData
     }
   }
+  calculateMahalanobis(dirPath, df, asciiData)
 }
