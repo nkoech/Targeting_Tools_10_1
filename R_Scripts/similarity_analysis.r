@@ -55,7 +55,7 @@ writeAscii <- function(outFile, asciiData)  {
     if (names(asciiData[i]) == "nodata_value") {
       writeLines(paste("NODATA_value  ", as.character(noData), sep = ""), asciiFile)
     } else if (names(asciiData[i]) == "gridData") {
-      gridData[is.na(gridData)] <- noData  # Replace NA values with -9999
+      gridData[!is.finite(gridData)] <- noData  # Replace NA and INF values with -9999
     } else {
       writeLines(paste(names(asciiData[i]), "         ", as.character(asciiData[i]), sep = ""), asciiFile)
     }
