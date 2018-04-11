@@ -23,22 +23,54 @@ readAscii<- function(inFile) {
   # Args:
   #   inFile: Input ASCII file
   # Return:
-  #   asciiData: A list of ascii header and grid data
+  #   asciiData: A list of ASCII header and grid data
   
   asciiData <- list()
   print(paste("Reading.... ", inFile, sep=""))
   for (i in 0:6) {
     if (i != 6){
       headerData <- scan(file = inFile, what = 'character', skip = i, nlines = 1, quiet=T)
-      asciiData[headerData[1]] <- as.numeric(headerData[2])
+      asciiData[tolower(headerData[1])] <- as.numeric(headerData[2])
     } else {
       gridData <- scan(file = inFile, skip = i, quiet=T)
-      gridData[gridData == asciiData$NODATA_value] <- NA
-      dim(gridData) <- c(asciiData$NROWS * asciiData$NCOLS, 1)
+      gridData[gridData == asciiData$nodata_value] <- NA
+      dim(gridData) <- c(asciiData$nrows * asciiData$ncols, 1)
       asciiData$gridData <- gridData
     }
   }
   return(asciiData)
+}
+
+writeAscii <- function(outFile, asciiData)  {
+  # Write ASCII data to a file
+  # Args:
+  #   outFile: 
+  #   asciiData: A list of ASCII header and grid data
+  # Return: None
+  
+  if (length(names(asciiData)) == 7){
+    nCols <- asciiData$ncols
+    nRows <- asciiData$nrows
+    xllcorner <- asciiData$xllcorner
+    yllcorner <- asciiData$yllcorner
+    cellSize <- asciiData$cellsize
+    noDataValue <- -9999
+    gridData <- asciiData$gridData
+  }
+  
+  # Replace NA values with -9999
+  gridData[is.na(gridData)] <- noDataValue
+  
+  # Write to ascii file
+  asciiFile <- file(outFile, "w")
+  writeLines(paste("ncols         ", as.character(nCols), sep = ""), asciiFile)
+  writeLines(paste("nrows         ", as.character(nRows), sep = ""), asciiFile)
+  writeLines(paste("xllcorner     ", as.character(xllcorner), sep = ""), asciiFile)
+  writeLines(paste("yllcorner     ", as.character(yllcorner), sep = ""), asciiFile)
+  writeLines(paste("cellsize      ", as.character(cellSize), sep = ""), asciiFile)
+  writeLines(paste("NODATA_value  ", as.character(noDataValue), sep = ""), asciiFile)
+  write(gridData, asciiFile, ncolumns = nCols, append = TRUE)
+  close(asciiFile)
 }
 
 calculateMahalanobis <- function (threshold, totalFiles, outFolder, df, asciiData){
@@ -48,7 +80,7 @@ calculateMahalanobis <- function (threshold, totalFiles, outFolder, df, asciiDat
   #   totalFiles: Total number of files to be processed
   #   outFolder: Output path
   #   df: Data frame with grid data as ASCII
-  #   asciiData: ASCII file with header and gid data
+  #   asciiData: A list of ASCII header and grid data
   # Return: None
   
   mn <- sapply(threshold[,7:(7+totalFiles-1)], mean)
@@ -63,7 +95,7 @@ calculateMESS <- function(df, totalFiles, threshold, asciiData, outFolder) {
   #   df: Data frame with grid data as ASCII
   #   totalFiles: Total number of files to be processed
   #   threshold: Corresponding covariate/raster values extracted on a point feature
-  #   asciiData: ASCII file with header and gid data
+  #   asciiData: A list of ASCII header and grid data
   #   outFolder: Output path
   # Return: None
   
