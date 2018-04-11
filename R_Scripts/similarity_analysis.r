@@ -44,32 +44,24 @@ readAscii<- function(inFile) {
 writeAscii <- function(outFile, asciiData)  {
   # Write ASCII data to a file
   # Args:
-  #   outFile: 
+  #   outFile:
   #   asciiData: A list of ASCII header and grid data
   # Return: None
   
-  if (length(names(asciiData)) == 7){
-    nCols <- asciiData$ncols
-    nRows <- asciiData$nrows
-    xllcorner <- asciiData$xllcorner
-    yllcorner <- asciiData$yllcorner
-    cellSize <- asciiData$cellsize
-    noDataValue <- -9999
-    gridData <- asciiData$gridData
-  }
-  
-  # Replace NA values with -9999
-  gridData[is.na(gridData)] <- noDataValue
-  
-  # Write to ascii file
+  noData <- -9999
+  gridData <- asciiData$gridData
   asciiFile <- file(outFile, "w")
-  writeLines(paste("ncols         ", as.character(nCols), sep = ""), asciiFile)
-  writeLines(paste("nrows         ", as.character(nRows), sep = ""), asciiFile)
-  writeLines(paste("xllcorner     ", as.character(xllcorner), sep = ""), asciiFile)
-  writeLines(paste("yllcorner     ", as.character(yllcorner), sep = ""), asciiFile)
-  writeLines(paste("cellsize      ", as.character(cellSize), sep = ""), asciiFile)
-  writeLines(paste("NODATA_value  ", as.character(noDataValue), sep = ""), asciiFile)
-  write(gridData, asciiFile, ncolumns = nCols, append = TRUE)
+  for (i in 1:length(asciiData)) {
+    if (names(asciiData[i]) == "nodata_value") {
+      writeLines(paste("NODATA_value  ", as.character(noData), sep = ""), asciiFile)
+    } else if (names(asciiData[i]) == "gridData") {
+      gridData[is.na(gridData)] <- noData  # Replace NA values with -9999
+    } else {
+      writeLines(paste(names(asciiData[i]), "         ", as.character(asciiData[i]), sep = ""), asciiFile)
+    }
+  }
+  print(paste("Saving.... ", outFile, sep = ""))
+  write(gridData, asciiFile, ncolumns = asciiData$ncols, append = TRUE)
   close(asciiFile)
 }
 
@@ -99,7 +91,6 @@ calculateMESS <- function(df, totalFiles, threshold, asciiData, outFolder) {
   #   outFolder: Output path
   # Return: None
   
-  print("Calculating Multivariate Environmental Similarity Surface (MESS)")
   boolNa = !is.na(apply(df, 1, sum))
   outMess = MESS(threshold[,7:(7 + totalFiles - 1)], df[boolNa,])
   asciiData$gridData = rep(NA, dim(df)[1])
