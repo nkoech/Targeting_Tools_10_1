@@ -1738,10 +1738,11 @@ class LandSimilarity(TargetingTool):
             cwd = os.path.dirname(os.path.realpath(__file__))  # Toolbox current working directory
             cwd = self.getDirectoryPath(cwd)  # Get subdirectory path
             similar_script = self.getFilePath(cwd, "similarity_")  # Get script path
-            read_script = self.getFilePath(cwd, "readAscii")
-            write_script = self.getFilePath(cwd, "writeAscii")
+            # read_script = self.getFilePath(cwd, "readAscii")
+            # write_script = self.getFilePath(cwd, "writeAscii")
             # Write out a script
-            f.write('source("' + similar_script + '"); similarityAnalysis(' + str(i) + ',"' + read_script + '","' + write_script + '","' + ras_temp_path + '") \n')
+            # f.write('source("' + similar_script + '"); similarityAnalysis(' + str(i) + ',"' + read_script + '","' + write_script + '","' + ras_temp_path + '") \n')
+            f.write('source("' + similar_script + '"); similarityAnalysis(' + str(i) + ', "' + ras_temp_path + '") \n')
 
     def getDirectoryPath(self, cwd):
         """ Get subdirectory path from the toolbox directory
