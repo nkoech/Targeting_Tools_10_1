@@ -6,14 +6,14 @@ installPackage <- function(pkg) {
   
   for (i in 1:length(pkg)){
     if (!is.element(pkg[i], installed.packages()[,1])) {
-      print(paste("Installing package:", pkg[i]))
+      print(paste("Installing package: ", pkg[i]))
       if (pkg[i] == "modEvA"){
         install.packages("modEvA", repos="http://R-Forge.R-project.org")
       } else {
         install.packages(pkg[i], dep = TRUE)
       }
     }
-    print(paste("Loading package:", pkg[i]))
+    print(paste("Loading package: ", pkg[i]))
     require(pkg[i], character.only = TRUE)	
   }
 }
@@ -26,7 +26,7 @@ readAscii<- function(inFile) {
   #   asciiData: A list of ASCII header and grid data
   
   asciiData <- list()
-  print(paste("Reading.... ", inFile, sep=""))
+  print(paste("Reading: ", inFile, sep=""))
   for (i in 0:6) {
     if (i != 6){
       headerData <- scan(file = inFile, what = 'character', skip = i, nlines = 1, quiet=T)
@@ -60,7 +60,7 @@ writeAscii <- function(outFile, asciiData)  {
       writeLines(paste(names(asciiData[i]), "         ", as.character(asciiData[i]), sep = ""), asciiFile)
     }
   }
-  print(paste("Saving.... ", outFile, sep = ""))
+  print(paste("Saving: ", outFile, sep = ""))
   write(gridData, asciiFile, ncolumns = asciiData$ncols, append = TRUE)
   close(asciiFile)
 }
