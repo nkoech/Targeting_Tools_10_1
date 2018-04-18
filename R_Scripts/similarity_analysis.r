@@ -8,9 +8,9 @@ installPackage <- function(pkg) {
     if (!is.element(pkg[i], installed.packages()[,1])) {
       print(paste("Installing package: ", pkg[i]))
       if (pkg[i] == "modEvA"){
-        install.packages("modEvA", repos="http://R-Forge.R-project.org")
+        install.packages("modEvA", repos="http://R-Forge.R-project.org", dep = TRUE)
       } else {
-        install.packages(pkg[i], dep = TRUE)
+        install.packages(pkg[i], repos = "http://cran.us.r-project.org", dep = TRUE)
       }
     }
     print(paste("Loading package: ", pkg[i]))
