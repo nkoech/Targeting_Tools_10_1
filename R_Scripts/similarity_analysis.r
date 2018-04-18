@@ -1,20 +1,17 @@
 installPackage <- function(pkg) {
   # Install and add a package
   # Args:
-  #   pkg: A vector of packages
+  #   pkg: A list of packages to be installed and CRAN URLs
   # Return: None
   
   for (i in 1:length(pkg)){
-    if (!is.element(pkg[i], installed.packages()[,1])) {
-      print(paste("Installing package: ", pkg[i]))
-      if (pkg[i] == "modEvA"){
-        install.packages("modEvA", repos="http://R-Forge.R-project.org", dep = TRUE)
-      } else {
-        install.packages(pkg[i], repos = "http://cran.us.r-project.org", dep = TRUE)
-      }
+    if (!is.element(pkg[[i]], installed.packages()[,1])) {
+      pkgName <- names(pkg)[i]
+      print(paste("Installing packagen xxx: ", pkgName))
+      install.packages(pkgName, repos=pkg[[i]], dep = TRUE)
     }
-    print(paste("Loading package: ", pkg[i]))
-    require(pkg[i], character.only = TRUE)	
+    print(paste("Loading package: ", pkgName))
+    require(pkgName, character.only = TRUE)	
   }
 }
 
@@ -89,7 +86,7 @@ calculateMESS <- function(df, totalFiles, threshold, asciiData, outFolder) {
   #   threshold: Corresponding covariate/raster values extracted on a point feature
   #   asciiData: A list of ASCII header and grid data
   #   outFolder: Output path
-  # Return: None
+  # Return: No
   
   boolNa = !is.na(apply(df, 1, sum))
   outMess = MESS(threshold[,7:(7 + totalFiles - 1)], df[boolNa,])
@@ -105,7 +102,9 @@ similarityAnalysis <- function(totalFiles, workSpace) {
   #   fileDir: Path to where files are located
   # Return: None
   
-  installPackage(c("raster", "rgdal", "modEvA"))
+  usCRAN = "http://cran.us.r-project.org"
+  installPackage(list(raster = c(usCRAN), rgdal = c(usCRAN), modEvA = c("http://R-Forge.R-project.org")))
+  
   print('Starting similarity anlysis...')
   df <- data.frame()
   asciiData <- list()
