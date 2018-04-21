@@ -1375,8 +1375,8 @@ class LandStatistics(TargetingTool):
                 self.addTableField(first_stat_table, in_fc_field)  # Adds field to a .dbf table
             # Process: Calculate Field
             arcpy.AddMessage("Adding suitability rank values to new fields in {0} \n".format(first_stat_table))
-            arcpy.CalculateField_management(first_stat_table, "POLY_VAL", "([VALUE] - Right([VALUE] , 3)) / 1000", "VB", "")
-            arcpy.CalculateField_management(first_stat_table, "LAND_RANK", "Right([VALUE] , 3)", "VB", "")
+            arcpy.CalculateField_management(first_stat_table, "POLY_VAL", "(!VALUE! - int(str(!VALUE!)[-3:])) / 1000", "PYTHON_9.3", "")
+            arcpy.CalculateField_management(first_stat_table, "LAND_RANK", "int(str(!VALUE!)[-3:])", "PYTHON_9.3", "")
             # Add values to table
             arcpy.AddMessage("Adding ID values to new fields in {0} \n".format(first_stat_table))
             self.addValuesZonalStatisticsTable(in_fc_field, ras_poly, first_stat_table)
