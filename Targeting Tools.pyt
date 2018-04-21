@@ -1052,8 +1052,8 @@ class LandStatistics(TargetingTool):
         in_raster = parameters[0].valueAsText.replace("\\","/")
         if parameters[1].value == "EQUAL INTERVAL":
             stat_raster = super(LandStatistics, self).calculateStatistics(in_raster)
-            min_val = arcpy.Raster(stat_raster).minimum  # Minimum input raster value
-            max_val = arcpy.Raster(stat_raster).maximum  # Maximum input raster value
+            min_val = stat_raster.minimum  # Minimum input raster value
+            max_val = stat_raster.maximum  # Maximum input raster value
             num_cls = parameters[2].value
             cls_width = float(max_val - min_val)/num_cls  # Class width
             if cls_width.is_integer():
@@ -1425,7 +1425,7 @@ class LandSimilarity(TargetingTool):
         """Define the tool (tool name is the name of the class)."""
         self.label = "Land Similarity"
         self.description = ""
-        self.canRunInBackground = False
+        self.canRunInBackground = True
         self.parameters = [
             parameter("Input raster", "in_raster", "Raster Layer", multiValue=True),
             parameter("Input point layer", "in_point", "Feature Layer"),

@@ -5,8 +5,8 @@ installPackage <- function(pkg) {
   # Return: None
   
   for (i in 1:length(pkg)){
-    if (!is.element(pkg[[i]], installed.packages()[,1])) {
-      pkgName <- names(pkg)[i]
+    pkgName <- names(pkg)[i]
+    if (!is.element(pkgName, installed.packages()[,1])) {
       print(paste("Installing package: ", pkgName))
       install.packages(pkgName, repos=pkg[[i]], dep = TRUE)
     }
