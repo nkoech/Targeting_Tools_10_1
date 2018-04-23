@@ -74,7 +74,8 @@ calculateMahalanobis <- function (threshold, totalFiles, outFolder, df, asciiDat
   
   mn <- sapply(threshold[,7:(7+totalFiles-1)], mean)
   print("Calculating Mahalanobis Distance")
-  asciiData$gridData <- mahalanobis(df, mn, cov(df, use = "complete.obs"))
+  # asciiData$gridData <- mahalanobis(df, mn, cov(df, use = "complete.obs"))
+  asciiData$gridData <- mahalanobis(df, mn, cov(df, use = "complete.obs"), tol=1e-20)
   writeAscii(paste(outFolder, "MahalanobisDist.asc", sep = ""), asciiData)
 }
 
