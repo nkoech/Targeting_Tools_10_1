@@ -62,35 +62,37 @@ writeAscii <- function(outFile, asciiData)  {
   close(asciiFile)
 }
 
-calculateMahalanobis <- function (threshold, totalFiles, outFolder, df, asciiData){
+calculateMahalanobis <- function (threshold, Idx, totalFiles, outFolder, df, asciiData){
   # Caculate mahalanobis distance 
   # Args:
   #   threshold: Corresponding covariate/raster values extracted on a point feature
+  #   Idx: Covariate/raster values starting list index
   #   totalFiles: Total number of files to be processed
   #   outFolder: Output path
   #   df: Data frame with grid data as ASCII
   #   asciiData: A list of ASCII header and grid data
   # Return: None
   
-  mn <- sapply(threshold[,7:(7+totalFiles-1)], mean)
+  mn <- sapply(threshold[,Idx:(Idx + totalFiles - 1)], mean)
   print("Calculating Mahalanobis Distance")
   # asciiData$gridData <- mahalanobis(df, mn, cov(df, use = "complete.obs"))
   asciiData$gridData <- mahalanobis(df, mn, cov(df, use = "complete.obs"), tol=1e-20)
   writeAscii(paste(outFolder, "MahalanobisDist.asc", sep = ""), asciiData)
 }
 
-calculateMESS <- function(df, totalFiles, threshold, asciiData, outFolder) {
+calculateMESS <- function(df, totalFiles, threshold, Idx, asciiData, outFolder) {
   # Multivariate Environmental Similarity Surface (MESS)
   # Args:
   #   df: Data frame with grid data as ASCII
   #   totalFiles: Total number of files to be processed
   #   threshold: Corresponding covariate/raster values extracted on a point feature
+  #   Idx: Covariate/raster values starting list index
   #   asciiData: A list of ASCII header and grid data
   #   outFolder: Output path
   # Return: No
   
   boolNa = !is.na(apply(df, 1, sum))
-  outMess = MESS(threshold[,7:(7 + totalFiles - 1)], df[boolNa,])
+  outMess = MESS(threshold[,Idx:(Idx + totalFiles - 1)], df[boolNa,])
   asciiData$gridData = rep(NA, dim(df)[1])
   asciiData$gridData[boolNa] = outMess$TOTAL
   writeAscii(paste(outFolder, "MESS.asc", sep = ""), asciiData)
@@ -110,6 +112,7 @@ similarityAnalysis <- function(totalFiles, workSpace) {
   df <- data.frame()
   asciiData <- list()
   threshold <- read.csv(paste(workSpace, "temp.csv", sep = ""))
+  Idx <- which(names(threshold) == "Y") + 1
   for (i in 1:totalFiles){
     asciiData <- readAscii(paste(workSpace, "tempAscii_", i, ".asc", sep = ""))
     if (i != 1) {
@@ -118,6 +121,6 @@ similarityAnalysis <- function(totalFiles, workSpace) {
       df <- asciiData$gridData
     }
   }
-  calculateMahalanobis(threshold, totalFiles, workSpace, df, asciiData)
-  calculateMESS(df, totalFiles, threshold, asciiData, workSpace)
+  calculateMahalanobis(threshold, Idx, totalFiles, workSpace, df, asciiData)
+  calculateMESS(df, totalFiles, threshold, Idx, asciiData, workSpace)
 }
