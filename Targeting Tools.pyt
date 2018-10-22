@@ -18,6 +18,7 @@
 
 import os, sys, csv, re, time, arcpy, shutil, ntpath, subprocess, traceback
 from itertools import *
+from dbfread import DBF
 
 arcpy.env.overwriteOutput = True
 
@@ -1545,11 +1546,9 @@ class LandSimilarity(TargetingTool):
             else:
                 self.createValueSample(parameters, in_fc_pt, ras_temp_path, in_fc=None, extent=None)  # Create raster cell value sample
             self.deleteTempFile(parameters, ras_temp_path)  # Delete temporary files
-            arcpy.AddMessage("Joining {0} to {1} \n".format(in_fc_pt, ras_temp_path + "temp.dbf"))
-            arcpy.JoinField_management(in_fc_pt, "FID", ras_temp_path + "temp.dbf", "OID", "")  # Join tables
-            out_csv = ras_temp_path + "temp.csv"
-            self.writeToCSV(in_fc_pt, out_csv)  # Write feature class table to CSV file
             arcpy.management.Delete(in_fc_pt)  # Delete vector
+            out_csv = ras_temp_path + "temp.csv"
+            self.writeToCSV(ras_temp_path + "temp.dbf", out_csv) # Write .dbf table to CSV file
             self.createRScript(parameters, ras_temp_path)  # Create R script
             self.runCommand(r_exe_path, ras_temp_path)  # Run R command
             self.asciiToRasterConversion(parameters, ras_temp_path)  # ASCII to raster conversion
@@ -1701,25 +1700,24 @@ class LandSimilarity(TargetingTool):
             if arcpy.Exists(ras_temp_path + "ras_envset_" + str(i)):
                 super(LandSimilarity, self).deleteFile(ras_temp_path, "ras_envset_" + str(i))  # Delete temporary files
 
-    def writeToCSV(self, in_fc_pt, out_csv):
-        """ Write feature class table to CSV file
+    def writeToCSV(self, tbl_dbf, out_csv):
+        """ Write .dbf table to CSV file
             Args:
-                in_fc_pt: Input point layer
+                tbl_dbf: Input .dbf table file
                 out_csv: Output CSV file
             Returns: None
         """
-        # Get field names
-        fields = arcpy.ListFields(in_fc_pt)
-        field_names = [field.name for field in fields]
-        arcpy.AddMessage("Exporting {0} table to {1} \n".format(in_fc_pt, out_csv))
-        with open(out_csv, 'wb') as f:
-            w = csv.writer(f)
-            w.writerow(field_names)  # Write field names to CSV file as headers
-            # Search through rows and write values to CSV
-            for row in arcpy.SearchCursor(in_fc_pt):
-                field_vals = [row.getValue(field.name) for field in fields]
-                w.writerow(field_vals)
-            del row
+        with open(out_csv, 'wb') as csvf:
+            db = DBF(tbl_dbf)
+            headers = db.field_names[3:]
+            del_headers = set(db.field_names[:3])
+            csv_writer = csv.DictWriter(csvf, fieldnames=headers)
+            csv_writer.writeheader()
+            for rec in db:
+                for h in del_headers:
+                    if h in rec:
+                        del rec[h]
+                csv_writer.writerow(rec)
 
     def createRScript(self, parameters, ras_temp_path):
         """ Create R script

@@ -112,7 +112,6 @@ similarityAnalysis <- function(totalFiles, workSpace) {
   df <- data.frame()
   asciiData <- list()
   threshold <- read.csv(paste(workSpace, "temp.csv", sep = ""))
-  Idx <- which(names(threshold) == "Y") + 1
   for (i in 1:totalFiles){
     asciiData <- readAscii(paste(workSpace, "tempAscii_", i, ".asc", sep = ""))
     if (i != 1) {
@@ -121,6 +120,6 @@ similarityAnalysis <- function(totalFiles, workSpace) {
       df <- asciiData$gridData
     }
   }
-  calculateMahalanobis(threshold, Idx, totalFiles, workSpace, df, asciiData)
-  calculateMESS(df, totalFiles, threshold, Idx, asciiData, workSpace)
+  calculateMahalanobis(threshold, 1, totalFiles, workSpace, df, asciiData)
+  calculateMESS(df, totalFiles, threshold, 1, asciiData, workSpace)
 }
